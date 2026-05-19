@@ -1,4 +1,4 @@
-# my-pi-status
+# my-pi
 
 A [Pi](https://github.com/earendil-works/pi-coding-agent) extension that replaces the default footer with a compact single-line status bar.
 
@@ -24,7 +24,7 @@ Segments are color-coded: git status turns red when dirty, green when clean, con
 Copy or symlink this directory into your Pi extensions folder:
 
 ```sh
-ln -s $(pwd) ~/.pi/agent/extensions/my-pi-status
+ln -s $(pwd) ~/.pi/agent/extensions/my-pi
 ```
 
 Pi will auto-load the extension on next start.

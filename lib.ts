@@ -1,5 +1,5 @@
 /**
- * Pure, testable functions extracted from the my-pi-status extension.
+ * Pure, testable functions extracted from the my-pi extension.
  */
 
 import type { AssistantMessage } from "@earendil-works/pi-ai";
