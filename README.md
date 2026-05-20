@@ -1,8 +1,18 @@
 # my-pi
 
-A [Pi](https://github.com/earendil-works/pi-coding-agent) extension that replaces the default footer with a compact single-line status bar.
+A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customization packages. Each package under `packages/` is a self-contained feature that plugs into Pi's extension API.
 
-## What it shows
+## Packages
+
+| Package | Description |
+|---|---|
+| [**footer**](packages/footer/) | Compact single-line status bar replacing the default footer |
+
+> Add new packages by creating a folder under `packages/` and registering it in `index.ts`.
+
+## Footer
+
+Replaces the default footer with a single line showing:
 
 ```
 model[provider] | branch +2 ~1 ?3 | cwd | ctx: 43% (54.0k/128.0k) | ↑150 ↓275 | think: med
@@ -11,7 +21,7 @@ model[provider] | branch +2 ~1 ?3 | cwd | ctx: 43% (54.0k/128.0k) | ↑150 ↓27
 | Segment | Description |
 |---|---|
 | **model[provider]** | Current model name and provider |
-| **branch +2 ~1 ?3** | Git branch with staged/modified/untracked counts (or `clean`) |
+| **branch +2 ~1 ?3** | Git branch with staged/modified/untracked counts (or `✓`) |
 | **cwd** | Current working directory basename |
 | **ctx: N% (used/total)** | Context window usage |
 | **↑in ↓out** | Cumulative token totals for the session |
@@ -39,7 +49,13 @@ npm test
 ## Project structure
 
 ```
-index.ts          Extension entry point — hooks into Pi events, renders the footer
-lib.ts            Pure, testable functions (formatting, parsing, token counting)
-lib.test.ts       Vitest tests for lib.ts (23 tests)
+index.ts                Orchestrator — activates all packages
+packages/
+├── footer/
+│   ├── index.ts        Exports registerFooter(pi)
+│   ├── lib.ts          Pure, testable functions
+│   └── lib.test.ts     Vitest tests
+└── …                   Future packages go here
 ```
+
+Each package exports a registration function with the signature `(pi: ExtensionAPI) => void`. To add a new customization, create a folder under `packages/`, add one import + call to root `index.ts`, and you're done.

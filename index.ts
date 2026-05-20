@@ -1,147 +1,15 @@
 /**
- * My Status — Single-line custom footer for Pi
+ * my-pi — Orchestrator that activates all packages.
  *
- * Replaces the default footer with a single line showing:
- *   model[provider] | branch ↑N ↓N | +N ~N ?N ✕N ⚑N | cwd | ctx: x% (used/total) | ⇡in ⇣out | thinking
- * All segments joined by " | ".
+ * Each package under packages/ exports a registration function
+ * with the signature `(pi: ExtensionAPI) => void`.
  */
 
-import type { ExtensionAPI, ThinkingLevelSelectEvent } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
-import {
-	countTokens,
-	fmtTokens,
-	formatContextStr,
-	formatModelStr,
-	parseGitPorcelainV2,
-	parseStashCount,
-	thinkingLabel,
-	type GitStatus,
-} from "./lib";
-
-const SEP = " | ";
-
-let cachedGitStatus: GitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
-let cachedStashCount = 0;
-let gitStatusTimer: ReturnType<typeof setInterval> | undefined;
-let tuiHandle: { requestRender(): void } | undefined;
-
-async function refreshGitStatus(pi: ExtensionAPI, cwd: string) {
-	try {
-		const [statusResult, stashResult] = await Promise.all([
-			pi.exec("git", ["status", "--porcelain=v2", "--branch"], { cwd, timeout: 3000 }),
-			pi.exec("git", ["rev-list", "--count", "refs/stash"], { cwd, timeout: 3000 }).catch(() => ({ code: 1, stdout: "", stderr: "" })),
-		]);
-		if (statusResult.code === 0) {
-			cachedGitStatus = parseGitPorcelainV2(statusResult.stdout);
-			cachedStashCount = parseStashCount(stashResult.stdout);
-		} else {
-			cachedGitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
-			cachedStashCount = 0;
-		}
-	} catch {
-		cachedGitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
-		cachedStashCount = 0;
-	}
-	tuiHandle?.requestRender();
-}
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerFooter } from "./packages/footer";
 
 export default function (pi: ExtensionAPI) {
-	let thinkingLevel = "off";
-
-	pi.on("thinking_level_select", async (event: ThinkingLevelSelectEvent) => {
-		thinkingLevel = event.level;
-	});
-
-	pi.on("session_start", async (_event, ctx) => {
-		thinkingLevel = pi.getThinkingLevel();
-
-		// Refresh git status periodically
-		refreshGitStatus(pi, ctx.cwd);
-		if (gitStatusTimer) clearInterval(gitStatusTimer);
-		gitStatusTimer = setInterval(() => refreshGitStatus(pi, ctx.cwd), 5000);
-
-		ctx.ui.setFooter((tui, theme, footerData) => {
-			tuiHandle = tui;
-
-			const unsub = footerData.onBranchChange(() => {
-				refreshGitStatus(pi, ctx.cwd);
-			});
-
-			return {
-				dispose() {
-					unsub();
-					tuiHandle = undefined;
-					if (gitStatusTimer) clearInterval(gitStatusTimer);
-				},
-				invalidate() {
-					refreshGitStatus(pi, ctx.cwd);
-				},
-				render(width: number): string[] {
-					// --- Model[provider] ---
-					const modelStr = formatModelStr(ctx.model);
-
-					// --- Git: branch + ahead/behind segment ---
-					const branch = footerData.getGitBranch();
-					const hasUpstream = cachedGitStatus.ahead > 0 || cachedGitStatus.behind > 0;
-					let branchSegment = "";
-					if (branch) {
-						if (hasUpstream) {
-							const parts: string[] = [];
-							if (cachedGitStatus.ahead) parts.push(`↑${cachedGitStatus.ahead}`);
-							if (cachedGitStatus.behind) parts.push(`↓${cachedGitStatus.behind}`);
-							branchSegment = `${branch} ${parts.join(" ")}`;
-						} else {
-							branchSegment = branch;
-						}
-					}
-
-					// --- Git: file status segment ---
-					const s = cachedGitStatus;
-					const isClean = s.staged === 0 && s.modified === 0 && s.untracked === 0 && s.conflicted === 0 && cachedStashCount === 0;
-					let fileStatusSegment = "";
-					if (isClean) {
-						fileStatusSegment = theme.fg("success", "✓");
-					} else {
-						const parts: string[] = [];
-						if (s.staged) parts.push(theme.fg("success", `+${s.staged}`));
-						if (s.modified) parts.push(theme.fg("muted", `~${s.modified}`));
-						if (s.untracked) parts.push(theme.fg("warning", `?${s.untracked}`));
-						if (s.conflicted) parts.push(theme.fg("error", `✕${s.conflicted}`));
-						if (cachedStashCount) parts.push(theme.fg("accent", `⚑${cachedStashCount}`));
-						fileStatusSegment = parts.join(" ");
-					}
-
-					// --- CWD ---
-					const cwdStr = ctx.cwd.split("/").pop() ?? ctx.cwd;
-
-					// --- Context usage ---
-					const ctxStr = formatContextStr(ctx.getContextUsage());
-
-					// --- Token totals ---
-					const { input, output } = countTokens(ctx.sessionManager.getBranch());
-					const tokenStr = `⇡${fmtTokens(input)} ⇣${fmtTokens(output)}`;
-
-					// --- Thinking level ---
-					const thinkStr = `think: ${thinkingLabel(thinkingLevel)}`;
-
-					const segments: string[] = [
-						theme.fg("accent", modelStr),
-					];
-					if (branchSegment) {
-						segments.push(theme.fg("toolTitle", branchSegment));
-					}
-					segments.push(
-						fileStatusSegment || theme.fg("success", "✓"),
-						theme.fg("toolTitle", cwdStr),
-						theme.fg("warning", ctxStr),
-						theme.fg("toolTitle", tokenStr),
-						theme.fg("mdLink", thinkStr),
-					);
-					const line = segments.join(theme.fg("dim", SEP));
-					return [truncateToWidth(line, width)];
-				},
-			};
-		});
-	});
+	registerFooter(pi);
+	// Add future packages here:
+	// registerSomething(pi);
 }
