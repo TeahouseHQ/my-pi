@@ -2,11 +2,10 @@
  * My Status — Single-line custom footer for Pi
  *
  * Replaces the default footer with a single line showing:
- *   model[provider] | branch | git status | cwd | ctx: x% (used/total) | ↑in ↓out | thinking
+ *   model[provider] | branch ↑N ↓N | +N ~N ?N ✕N ⚑N | cwd | ctx: x% (used/total) | ⇡in ⇣out | thinking
  * All segments joined by " | ".
  */
 
-import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ThinkingLevelSelectEvent } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import {
@@ -14,26 +13,35 @@ import {
 	fmtTokens,
 	formatContextStr,
 	formatModelStr,
-	parseGitPorcelain,
+	parseGitPorcelainV2,
+	parseStashCount,
 	thinkingLabel,
+	type GitStatus,
 } from "./lib";
 
 const SEP = " | ";
 
-let cachedGitStatus = "";
+let cachedGitStatus: GitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
+let cachedStashCount = 0;
 let gitStatusTimer: ReturnType<typeof setInterval> | undefined;
 let tuiHandle: { requestRender(): void } | undefined;
 
 async function refreshGitStatus(pi: ExtensionAPI, cwd: string) {
 	try {
-		const result = await pi.exec("git", ["status", "--porcelain"], { cwd, timeout: 3000 });
-		if (result.code === 0) {
-			cachedGitStatus = parseGitPorcelain(result.stdout);
+		const [statusResult, stashResult] = await Promise.all([
+			pi.exec("git", ["status", "--porcelain=v2", "--branch"], { cwd, timeout: 3000 }),
+			pi.exec("git", ["rev-list", "--count", "refs/stash"], { cwd, timeout: 3000 }).catch(() => ({ code: 1, stdout: "", stderr: "" })),
+		]);
+		if (statusResult.code === 0) {
+			cachedGitStatus = parseGitPorcelainV2(statusResult.stdout);
+			cachedStashCount = parseStashCount(stashResult.stdout);
 		} else {
-			cachedGitStatus = "no git";
+			cachedGitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
+			cachedStashCount = 0;
 		}
 	} catch {
-		cachedGitStatus = "no git";
+		cachedGitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
+		cachedStashCount = 0;
 	}
 	tuiHandle?.requestRender();
 }
@@ -73,11 +81,36 @@ export default function (pi: ExtensionAPI) {
 					// --- Model[provider] ---
 					const modelStr = formatModelStr(ctx.model);
 
-					// --- Git branch + status ---
+					// --- Git: branch + ahead/behind segment ---
 					const branch = footerData.getGitBranch();
-					const isClean = cachedGitStatus === "clean";
-					const statusSuffix = cachedGitStatus && cachedGitStatus !== "clean" ? ` ${cachedGitStatus}` : "";
-					const gitStr = branch ? `${branch}${statusSuffix}` : cachedGitStatus || "no git";
+					const hasUpstream = cachedGitStatus.ahead > 0 || cachedGitStatus.behind > 0;
+					let branchSegment = "";
+					if (branch) {
+						if (hasUpstream) {
+							const parts: string[] = [];
+							if (cachedGitStatus.ahead) parts.push(`↑${cachedGitStatus.ahead}`);
+							if (cachedGitStatus.behind) parts.push(`↓${cachedGitStatus.behind}`);
+							branchSegment = `${branch} ${parts.join(" ")}`;
+						} else {
+							branchSegment = branch;
+						}
+					}
+
+					// --- Git: file status segment ---
+					const s = cachedGitStatus;
+					const isClean = s.staged === 0 && s.modified === 0 && s.untracked === 0 && s.conflicted === 0 && cachedStashCount === 0;
+					let fileStatusSegment = "";
+					if (isClean) {
+						fileStatusSegment = theme.fg("success", "✓");
+					} else {
+						const parts: string[] = [];
+						if (s.staged) parts.push(theme.fg("success", `+${s.staged}`));
+						if (s.modified) parts.push(theme.fg("muted", `~${s.modified}`));
+						if (s.untracked) parts.push(theme.fg("warning", `?${s.untracked}`));
+						if (s.conflicted) parts.push(theme.fg("error", `✕${s.conflicted}`));
+						if (cachedStashCount) parts.push(theme.fg("accent", `⚑${cachedStashCount}`));
+						fileStatusSegment = parts.join(" ");
+					}
 
 					// --- CWD ---
 					const cwdStr = ctx.cwd.split("/").pop() ?? ctx.cwd;
@@ -87,19 +120,24 @@ export default function (pi: ExtensionAPI) {
 
 					// --- Token totals ---
 					const { input, output } = countTokens(ctx.sessionManager.getBranch());
-					const tokenStr = `↑${fmtTokens(input)} ↓${fmtTokens(output)}`;
+					const tokenStr = `⇡${fmtTokens(input)} ⇣${fmtTokens(output)}`;
 
 					// --- Thinking level ---
 					const thinkStr = `think: ${thinkingLabel(thinkingLevel)}`;
 
-					const segments = [
+					const segments: string[] = [
 						theme.fg("accent", modelStr),
-						theme.fg(isClean ? "success" : "error", gitStr),
+					];
+					if (branchSegment) {
+						segments.push(theme.fg("toolTitle", branchSegment));
+					}
+					segments.push(
+						fileStatusSegment || theme.fg("success", "✓"),
 						theme.fg("toolTitle", cwdStr),
 						theme.fg("warning", ctxStr),
 						theme.fg("toolTitle", tokenStr),
 						theme.fg("mdLink", thinkStr),
-					];
+					);
 					const line = segments.join(theme.fg("dim", SEP));
 					return [truncateToWidth(line, width)];
 				},

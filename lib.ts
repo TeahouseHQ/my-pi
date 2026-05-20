@@ -33,20 +33,71 @@ export function fmtTokens(n: number): string {
 
 // ── Git status parsing ─────────────────────────────────────────────────────
 
+export interface GitStatus {
+	ahead: number;
+	behind: number;
+	staged: number;
+	modified: number;
+	untracked: number;
+	conflicted: number;
+}
+
+const EMPTY_STATUS: GitStatus = {
+	ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0,
+};
+
 /**
- * Parse `git status --porcelain` output into a compact status string.
- * Returns `"clean"` when there are no changes, or a string like `"+2 ~1 ?3"`.
+ * Parse `git status --porcelain=v2 --branch` output into a structured GitStatus.
  */
-export function parseGitPorcelain(stdout: string): string {
-	const lines = stdout.trim().split("\n").filter(Boolean);
-	const staged = lines.filter((l) => l[0] !== " " && l[0] !== "?").length;
-	const modified = lines.filter((l) => l[1] === "M" || l[0] === "M").length;
-	const untracked = lines.filter((l) => l[0] === "?" && l[1] === "?").length;
-	const parts: string[] = [];
-	if (staged) parts.push(`+${staged}`);
-	if (modified) parts.push(`~${modified}`);
-	if (untracked) parts.push(`?${untracked}`);
-	return parts.length > 0 ? parts.join(" ") : "clean";
+export function parseGitPorcelainV2(stdout: string): GitStatus {
+	const result: GitStatus = { ...EMPTY_STATUS };
+
+	for (const line of stdout.split("\n")) {
+		const trimmed = line.trim();
+		if (!trimmed) continue;
+
+		if (trimmed.startsWith("# branch.ab")) {
+			// e.g. "# branch.ab +2 -1"
+			const parts = trimmed.split(/\s+/);
+			for (const p of parts) {
+				if (p.startsWith("+")) result.ahead = Number(p.slice(1));
+				if (p.startsWith("-")) result.behind = Number(p.slice(1));
+			}
+		} else if (trimmed.startsWith("1 ")) {
+			// Ordinary entry: "1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>"
+			// XY: index status (col 2) and worktree status (col 3)
+			const xy = trimmed.substring(2, 4); // e.g. "M." or ".M" or "MM"
+			const indexStatus = xy[0];
+			const worktreeStatus = xy[1];
+			if (indexStatus !== "." && indexStatus !== "?") result.staged++;
+			if (worktreeStatus !== "." && worktreeStatus !== "?") result.modified++;
+		} else if (trimmed.startsWith("2 ")) {
+			// Renamed/copied entry: "2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <X><orig> <path>"
+			const xy = trimmed.substring(2, 4);
+			const worktreeStatus = xy[1];
+			if (xy[0] !== ".") result.staged++;
+			if (worktreeStatus !== ".") result.modified++;
+		} else if (trimmed.startsWith("u ")) {
+			// Unmerged entry
+			result.conflicted++;
+		} else if (trimmed.startsWith("? ")) {
+			// Untracked
+			result.untracked++;
+		}
+	}
+
+	return result;
+}
+
+/**
+ * Parse output of `git rev-list --count refs/stash` into a count.
+ * Returns 0 when output is empty, whitespace, or non-numeric.
+ */
+export function parseStashCount(stdout: string): number {
+	const trimmed = stdout.trim();
+	if (!trimmed) return 0;
+	const n = Number(trimmed);
+	return Number.isNaN(n) ? 0 : n;
 }
 
 // ── Model string ───────────────────────────────────────────────────────────

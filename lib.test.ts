@@ -4,7 +4,8 @@ import {
 	fmtTokens,
 	formatContextStr,
 	formatModelStr,
-	parseGitPorcelain,
+	parseGitPorcelainV2,
+	parseStashCount,
 	thinkingLabel,
 } from "./lib";
 
@@ -48,43 +49,105 @@ describe("thinkingLabel", () => {
 	});
 });
 
-// ── parseGitPorcelain ──────────────────────────────────────────────────────
+// ── parseGitPorcelainV2 ────────────────────────────────────────────────────
 
-describe("parseGitPorcelain", () => {
-	it("returns 'clean' for empty output", () => {
-		expect(parseGitPorcelain("")).toBe("clean");
-		expect(parseGitPorcelain("  ")).toBe("clean");
+describe("parseGitPorcelainV2", () => {
+	it("returns zeros for empty output", () => {
+		expect(parseGitPorcelainV2("")).toEqual({
+			ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0,
+		});
 	});
 
-	it("counts staged files (X in column 1, not ? or space)", () => {
-		const out = ["A  file1.ts", "A  file2.ts"].join("\n");
-		expect(parseGitPorcelain(out)).toBe("+2");
+	it("parses ahead/behind from branch.ab line", () => {
+		const out = ["# branch.head main", "# branch.ab +2 -1"].join("\n");
+		expect(parseGitPorcelainV2(out)).toEqual(
+			expect.objectContaining({ ahead: 2, behind: 1 }),
+		);
 	});
 
-	it("counts modified files (M in column 1 or 2)", () => {
-		// NOTE: .trim() on full stdout strips the leading space from line 1,
-		// so " M" becomes "M" — both lines are counted as staged + modified.
-		const out = [" M file1.ts", "M  file2.ts"].join("\n");
-		expect(parseGitPorcelain(out)).toBe("+2 ~2");
+	it("handles zero ahead/behind", () => {
+		const out = "# branch.ab +0 -0";
+		expect(parseGitPorcelainV2(out)).toEqual(
+			expect.objectContaining({ ahead: 0, behind: 0 }),
+		);
 	});
 
-	it("correctly parses work-tree modified when not on first line", () => {
-		const out = ["A  staged.ts", " M modified.ts"].join("\n");
-		expect(parseGitPorcelain(out)).toBe("+1 ~1");
+	it("parses staged files (1 lines with non-dot index status)", () => {
+		const out = ["1 M. N... 100644 100644 100644 abc def file.ts"].join("\n");
+		expect(parseGitPorcelainV2(out)).toEqual(
+			expect.objectContaining({ staged: 1, modified: 0 }),
+		);
+		const out2 = [
+			"1 A. N... 000000 100644 100644 0000000 abc new.ts",
+			"1 D. N... 100644 000000 000000 abc def del.ts",
+		].join("\n");
+		expect(parseGitPorcelainV2(out2)).toEqual(
+			expect.objectContaining({ staged: 2 }),
+		);
 	});
 
-	it("counts untracked files (?? in both columns)", () => {
-		expect(parseGitPorcelain("?? new.ts")).toBe("?1");
+	it("parses modified files (2 lines with non-dot worktree status)", () => {
+		const out = ["2 .M N... 100644 100644 100644 abc def file.ts"].join("\n");
+		expect(parseGitPorcelainV2(out)).toEqual(
+			expect.objectContaining({ modified: 1, staged: 0 }),
+		);
+	});
+
+	it("parses untracked files (? lines)", () => {
+		const out = "? new.ts";
+		expect(parseGitPorcelainV2(out)).toEqual(
+			expect.objectContaining({ untracked: 1 }),
+		);
+		const out2 = ["? a.ts", "? b.ts", "? c.ts"].join("\n");
+		expect(parseGitPorcelainV2(out2)).toEqual(
+			expect.objectContaining({ untracked: 3 }),
+		);
+	});
+
+	it("parses conflicted files (u lines)", () => {
+		const out = "u AA N... 100644 100644 100644 abc def both.ts";
+		expect(parseGitPorcelainV2(out)).toEqual(
+			expect.objectContaining({ conflicted: 1 }),
+		);
+	});
+
+	it("handles 1 line with both index and worktree changes", () => {
+		// "1 MM" means staged AND modified in worktree
+		const out = "1 MM N... 100644 100644 100644 abc def file.ts";
+		const result = parseGitPorcelainV2(out);
+		expect(result.staged).toBe(1);
+		expect(result.modified).toBe(1);
 	});
 
 	it("combines all categories", () => {
-		const out = ["A  staged.ts", " M modified.ts", "?? untracked.ts"].join("\n");
-		expect(parseGitPorcelain(out)).toBe("+1 ~1 ?1");
+		const out = [
+			"# branch.ab +3 -1",
+			"1 M. N... 100644 100644 100644 abc def staged.ts",
+			"2 .M N... 100644 100644 100644 abc def modified.ts",
+			"? untracked.ts",
+			"u AA N... 100644 100644 100644 abc def conflict.ts",
+		].join("\n");
+		expect(parseGitPorcelainV2(out)).toEqual({
+			ahead: 3, behind: 1, staged: 1, modified: 1, untracked: 1, conflicted: 1,
+		});
+	});
+});
+
+// ── parseStashCount ─────────────────────────────────────────────────────────
+
+describe("parseStashCount", () => {
+	it("returns 0 for empty output", () => {
+		expect(parseStashCount("")).toBe(0);
+		expect(parseStashCount("  ")).toBe(0);
 	});
 
-	it("handles multiple files per category", () => {
-		const out = ["A  a.ts", "A  b.ts", "?? c.ts", "?? d.ts", "?? e.ts"].join("\n");
-		expect(parseGitPorcelain(out)).toBe("+2 ?3");
+	it("parses a number from output", () => {
+		expect(parseStashCount("3")).toBe(3);
+		expect(parseStashCount("0")).toBe(0);
+	});
+
+	it("returns 0 for non-numeric output", () => {
+		expect(parseStashCount("fatal: bad revision")).toBe(0);
 	});
 });
 
