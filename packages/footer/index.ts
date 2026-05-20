@@ -11,7 +11,7 @@ import { truncateToWidth } from "@earendil-works/pi-tui";
 import {
 	countTokens,
 	fmtTokens,
-	formatContextStr,
+	formatContextBar,
 	formatModelStr,
 	parseGitPorcelainV2,
 	parseStashCount,
@@ -115,8 +115,17 @@ export function registerFooter(pi: ExtensionAPI) {
 					// --- CWD ---
 					const cwdStr = ctx.cwd.split("/").pop() ?? ctx.cwd;
 
-					// --- Context usage ---
-					const ctxStr = formatContextStr(ctx.getContextUsage());
+					// --- Context usage (health bar) ---
+					const usage = ctx.getContextUsage();
+					const barRaw = formatContextBar(usage);
+
+					// Colour the bar based on remaining health
+					let barColor: "success" | "warning" | "error" = "success";
+					if (usage && usage.percent != null) {
+						if (usage.percent > 50) barColor = "error";
+						else if (usage.percent >= 20) barColor = "warning";
+					}
+					const ctxStr = theme.fg(barColor, barRaw);
 
 					// --- Token totals ---
 					const { input, output } = countTokens(ctx.sessionManager.getBranch());
@@ -134,7 +143,7 @@ export function registerFooter(pi: ExtensionAPI) {
 					segments.push(
 						fileStatusSegment || theme.fg("success", "✓"),
 						theme.fg("toolTitle", cwdStr),
-						theme.fg("warning", ctxStr),
+						ctxStr,
 						theme.fg("toolTitle", tokenStr),
 						theme.fg("mdLink", thinkStr),
 					);

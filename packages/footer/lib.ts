@@ -108,17 +108,34 @@ export function formatModelStr(model: { name?: string; id: string; provider: str
 	return `${model.name ?? model.id}[${model.provider}]`;
 }
 
-// ── Context usage string ───────────────────────────────────────────────────
+// ── Context health bar ─────────────────────────────────────────────────────
 
-/** Format context usage into `"ctx: N% (used/total)"`. */
-export function formatContextStr(
+/**
+ * Build a health-bar string for context window usage.
+ *
+ * The bar starts full (green) when context is empty and drains as context
+ * fills up.  Colour shifts from green → yellow → red as usage grows.
+ *
+ * @param barWidth  number of characters for the bar itself (default 10)
+ */
+export function formatContextBar(
 	usage: { percent?: number | null; tokens?: number | null; contextWindow: number } | null | undefined,
+	barWidth = 10,
 ): string {
-	if (!usage || usage.percent == null || usage.tokens == null) return "ctx: —";
-	const pct = Math.round(usage.percent);
-	const used = fmtTokens(usage.tokens);
+	if (!usage || usage.percent == null || usage.tokens == null) {
+		const empty = "░".repeat(barWidth);
+		return `[${empty}]`;
+	}
+
+	// Remaining "health" = 100% - usage
+	const remaining = Math.max(0, Math.min(100, 100 - usage.percent));
+	const filled = Math.round((remaining / 100) * barWidth);
+	const empty = barWidth - filled;
+
+	const bar = "█".repeat(filled) + "░".repeat(empty);
 	const total = fmtTokens(usage.contextWindow);
-	return `ctx: ${pct}% (${used}/${total})`;
+
+	return `[${bar}] ${total}`;
 }
 
 // ── Token counting ─────────────────────────────────────────────────────────

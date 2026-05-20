@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	countTokens,
 	fmtTokens,
-	formatContextStr,
+	formatContextBar,
 	formatModelStr,
 	parseGitPorcelainV2,
 	parseStashCount,
@@ -170,28 +170,55 @@ describe("formatModelStr", () => {
 	});
 });
 
-// ── formatContextStr ───────────────────────────────────────────────────────
+// ── formatContextBar ───────────────────────────────────────────────────────
 
-describe("formatContextStr", () => {
-	it("returns placeholder for null/undefined", () => {
-		expect(formatContextStr(null)).toBe("ctx: —");
-		expect(formatContextStr(undefined)).toBe("ctx: —");
+describe("formatContextBar", () => {
+	it("returns empty bar for null/undefined", () => {
+		expect(formatContextBar(null)).toBe("[░░░░░░░░░░]");
+		expect(formatContextBar(undefined)).toBe("[░░░░░░░░░░]");
 	});
 
-	it("returns placeholder when percent or tokens missing", () => {
-		expect(formatContextStr({ contextWindow: 128000 })).toBe("ctx: —");
-		expect(formatContextStr({ percent: null, tokens: null, contextWindow: 128000 })).toBe("ctx: —");
+	it("returns empty bar when percent or tokens missing", () => {
+		expect(formatContextBar({ contextWindow: 128000 })).toBe("[░░░░░░░░░░]");
+		expect(formatContextBar({ percent: null, tokens: null, contextWindow: 128000 })).toBe("[░░░░░░░░░░]");
 	});
 
-	it("formats full usage", () => {
-		expect(
-			formatContextStr({ percent: 42.7, tokens: 54000, contextWindow: 128000 }),
-		).toBe("ctx: 43% (54.0k/128.0k)");
+	it("shows full bar when context is nearly empty", () => {
+		expect(formatContextBar({ percent: 0, tokens: 0, contextWindow: 128000 })).toBe(
+			"[██████████] 128.0k",
+		);
 	});
 
-	it("rounds percent", () => {
-		expect(formatContextStr({ percent: 0.4, tokens: 500, contextWindow: 128000 })).toBe(
-			"ctx: 0% (500/128.0k)",
+	it("shows partial bar at 50% usage", () => {
+		expect(formatContextBar({ percent: 50, tokens: 64000, contextWindow: 128000 })).toBe(
+			"[█████░░░░░] 128.0k",
+		);
+	});
+
+	it("shows empty bar at 100% usage", () => {
+		expect(formatContextBar({ percent: 100, tokens: 128000, contextWindow: 128000 })).toBe(
+			"[░░░░░░░░░░] 128.0k",
+		);
+	});
+
+	it("respects custom bar width", () => {
+		expect(formatContextBar({ percent: 50, tokens: 64000, contextWindow: 128000 }, 6)).toBe(
+			"[███░░░] 128.0k",
+		);
+	});
+
+	it("clamps percent below 0 and above 100", () => {
+		expect(formatContextBar({ percent: -10, tokens: 0, contextWindow: 128000 })).toBe(
+			"[██████████] 128.0k",
+		);
+		expect(formatContextBar({ percent: 150, tokens: 128000, contextWindow: 128000 })).toBe(
+			"[░░░░░░░░░░] 128.0k",
+		);
+	});
+
+	it("formats context window size", () => {
+		expect(formatContextBar({ percent: 0, tokens: 0, contextWindow: 1_000_000 })).toBe(
+			"[██████████] 1.00M",
 		);
 	});
 });
