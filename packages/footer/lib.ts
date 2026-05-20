@@ -2,8 +2,6 @@
  * Pure, testable functions extracted from the my-pi extension.
  */
 
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-
 // ── Thinking level labels ──────────────────────────────────────────────────
 
 const THINKING_LABELS: Record<string, string> = {
@@ -140,9 +138,10 @@ export function formatContextBar(
 
 // ── Token counting ─────────────────────────────────────────────────────────
 
-type BranchEntry =
-	| { type: "message"; message: AssistantMessage }
-	| { type: string; message?: undefined };
+type BranchEntry = {
+	type: string;
+	message?: { role: string; usage: { input: number; output: number } };
+};
 
 /** Sum input/output tokens across all assistant messages in a branch. */
 export function countTokens(branch: BranchEntry[]): { input: number; output: number } {

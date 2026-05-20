@@ -99,7 +99,7 @@ export function registerFooter(pi: ExtensionAPI) {
 					// --- Git: file status segment ---
 					const s = cachedGitStatus;
 					const isClean = s.staged === 0 && s.modified === 0 && s.untracked === 0 && s.conflicted === 0 && cachedStashCount === 0;
-					let fileStatusSegment = "";
+					let fileStatusSegment: string | undefined;
 					if (isClean) {
 						fileStatusSegment = theme.fg("success", "✓");
 					} else {
@@ -135,16 +135,18 @@ export function registerFooter(pi: ExtensionAPI) {
 					const thinkStr = `think: ${thinkingLabel(thinkingLevel)}`;
 
 					const segments: string[] = [
-						theme.fg("accent", modelStr),
+						theme.fg("toolTitle", cwdStr),
 					];
 					if (branchSegment) {
-						segments.push(theme.fg("toolTitle", branchSegment));
+						segments.push(
+							theme.fg("toolTitle", branchSegment),
+							fileStatusSegment ?? theme.fg("success", "✓"),
+						);
 					}
 					segments.push(
-						fileStatusSegment || theme.fg("success", "✓"),
-						theme.fg("toolTitle", cwdStr),
 						ctxStr,
 						theme.fg("toolTitle", tokenStr),
+						theme.fg("accent", modelStr),
 						theme.fg("mdLink", thinkStr),
 					);
 					const line = segments.join(theme.fg("dim", SEP));

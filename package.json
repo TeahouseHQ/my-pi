@@ -4,12 +4,20 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run packages/"
+    "test": "vitest run packages/",
+    "lint": "eslint .",
+    "types": "tsc --noEmit",
+    "check": "npm run lint && npm run types && npm test"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "type": "module",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
     "vitest": "^4.1.6"
   }
 }

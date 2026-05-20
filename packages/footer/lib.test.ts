@@ -232,11 +232,11 @@ describe("countTokens", () => {
 			message: {
 				role: "assistant" as const,
 				usage: { input, output },
-			} as any,
+			},
 		};
 	}
 	function userMsg() {
-		return { type: "message" as const, message: { role: "user" } };
+		return { type: "message" as const, message: { role: "user", usage: { input: 0, output: 0 } } };
 	}
 
 	it("returns zeros for empty branch", () => {
