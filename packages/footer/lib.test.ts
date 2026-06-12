@@ -149,6 +149,12 @@ describe("parseStashCount", () => {
 	it("returns 0 for non-numeric output", () => {
 		expect(parseStashCount("fatal: bad revision")).toBe(0);
 	});
+
+	it("counts stash entries from --walk-reflogs output", () => {
+		// `git rev-list --walk-reflogs --count refs/stash` yields the number of
+		// stash entries, not the full ancestry depth.
+		expect(parseStashCount("2\n")).toBe(2);
+	});
 });
 
 // ── formatModelStr ─────────────────────────────────────────────────────────

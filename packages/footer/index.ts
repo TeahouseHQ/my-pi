@@ -30,7 +30,7 @@ async function refreshGitStatus(pi: ExtensionAPI, cwd: string) {
 	try {
 		const [statusResult, stashResult] = await Promise.all([
 			pi.exec("git", ["status", "--porcelain=v2", "--branch"], { cwd, timeout: 3000 }),
-			pi.exec("git", ["rev-list", "--count", "refs/stash"], { cwd, timeout: 3000 }).catch(() => ({ code: 1, stdout: "", stderr: "" })),
+			pi.exec("git", ["rev-list", "--walk-reflogs", "--count", "refs/stash"], { cwd, timeout: 3000 }).catch(() => ({ code: 1, stdout: "", stderr: "" })),
 		]);
 		if (statusResult.code === 0) {
 			cachedGitStatus = parseGitPorcelainV2(statusResult.stdout);

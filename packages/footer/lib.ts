@@ -88,7 +88,9 @@ export function parseGitPorcelainV2(stdout: string): GitStatus {
 }
 
 /**
- * Parse output of `git rev-list --count refs/stash` into a count.
+ * Parse output of `git rev-list --walk-reflogs --count refs/stash` into a count.
+ * `--walk-reflogs` counts stash entries (reflog entries on refs/stash) rather
+ * than every commit reachable from the stash's ancestry.
  * Returns 0 when output is empty, whitespace, or non-numeric.
  */
 export function parseStashCount(stdout: string): number {
