@@ -13,6 +13,7 @@ import {
 	fmtTokens,
 	formatContextBar,
 	formatModelStr,
+	isLinkedWorktree,
 	parseGitPorcelainV2,
 	parseStashCount,
 	thinkingLabel,
@@ -23,25 +24,31 @@ const SEP = " | ";
 
 let cachedGitStatus: GitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
 let cachedStashCount = 0;
+let cachedIsWorktree = false;
 let gitStatusTimer: ReturnType<typeof setInterval> | undefined;
 let tuiHandle: { requestRender(): void } | undefined;
 
 async function refreshGitStatus(pi: ExtensionAPI, cwd: string) {
 	try {
-		const [statusResult, stashResult] = await Promise.all([
+		const [statusResult, stashResult, gitDirResult, commonDirResult] = await Promise.all([
 			pi.exec("git", ["status", "--porcelain=v2", "--branch"], { cwd, timeout: 3000 }),
 			pi.exec("git", ["rev-list", "--walk-reflogs", "--count", "refs/stash"], { cwd, timeout: 3000 }).catch(() => ({ code: 1, stdout: "", stderr: "" })),
+			pi.exec("git", ["rev-parse", "--git-dir"], { cwd, timeout: 3000 }).catch(() => ({ code: 1, stdout: "", stderr: "" })),
+			pi.exec("git", ["rev-parse", "--git-common-dir"], { cwd, timeout: 3000 }).catch(() => ({ code: 1, stdout: "", stderr: "" })),
 		]);
 		if (statusResult.code === 0) {
 			cachedGitStatus = parseGitPorcelainV2(statusResult.stdout);
 			cachedStashCount = parseStashCount(stashResult.stdout);
+			cachedIsWorktree = isLinkedWorktree(gitDirResult.stdout, commonDirResult.stdout);
 		} else {
 			cachedGitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
 			cachedStashCount = 0;
+			cachedIsWorktree = false;
 		}
 	} catch {
 		cachedGitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
 		cachedStashCount = 0;
+		cachedIsWorktree = false;
 	}
 	tuiHandle?.requestRender();
 }
@@ -86,13 +93,14 @@ export function registerFooter(pi: ExtensionAPI) {
 					const hasUpstream = cachedGitStatus.ahead > 0 || cachedGitStatus.behind > 0;
 					let branchSegment = "";
 					if (branch) {
+						const worktreeMark = cachedIsWorktree ? "🌳 " : "";
 						if (hasUpstream) {
 							const parts: string[] = [];
 							if (cachedGitStatus.ahead) parts.push(`↑${cachedGitStatus.ahead}`);
 							if (cachedGitStatus.behind) parts.push(`↓${cachedGitStatus.behind}`);
-							branchSegment = `${branch} ${parts.join(" ")}`;
+							branchSegment = `${worktreeMark}${branch} ${parts.join(" ")}`;
 						} else {
-							branchSegment = branch;
+							branchSegment = `${worktreeMark}${branch}`;
 						}
 					}
 
@@ -113,7 +121,7 @@ export function registerFooter(pi: ExtensionAPI) {
 					}
 
 					// --- CWD ---
-					const cwdStr = ctx.cwd.split("/").pop() ?? ctx.cwd;
+					const cwdStr = `📁 ${ctx.cwd.split("/").pop() ?? ctx.cwd}`;
 
 					// --- Context usage (health bar) ---
 					const usage = ctx.getContextUsage();

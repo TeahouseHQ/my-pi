@@ -88,6 +88,21 @@ export function parseGitPorcelainV2(stdout: string): GitStatus {
 }
 
 /**
+ * Determine whether the current directory sits inside a *linked* git worktree.
+ *
+ * Compares `git rev-parse --git-dir` against `git rev-parse --git-common-dir`.
+ * In the main worktree both resolve to the same directory; in a linked worktree
+ * `--git-dir` points under `.git/worktrees/<name>` while `--git-common-dir`
+ * always points at the main repo's `.git`, so the two differ.
+ */
+export function isLinkedWorktree(gitDir: string, gitCommonDir: string): boolean {
+	const a = gitDir.trim();
+	const b = gitCommonDir.trim();
+	if (!a || !b) return false;
+	return a !== b;
+}
+
+/**
  * Parse output of `git rev-list --walk-reflogs --count refs/stash` into a count.
  * `--walk-reflogs` counts stash entries (reflog entries on refs/stash) rather
  * than every commit reachable from the stash's ancestry.
@@ -153,12 +168,16 @@ type BranchEntry = {
 };
 
 /**
- * Sum input/output tokens across all assistant messages in a branch.
+ * Report token consumption for the current session branch.
  *
- * Input tokens include cache reads and writes: providers report the bulk of
- * the prompt under `cacheRead`/`cacheWrite`, leaving `input` as only the small
- * uncached delta.  Counting `input` alone drastically undercounts the real
- * prompt size.
+ * `input` is the size of the **most recent** assistant turn's full prompt
+ * (`input + cacheRead + cacheWrite`).  Each turn re-sends the whole
+ * conversation, so the latest turn already reflects the current context the
+ * session is consuming — summing every turn's input instead would re-count the
+ * same cached prompt over and over and balloon far past reality.
+ *
+ * `output` is the total number of tokens the assistant has generated across
+ * the session, since each output is produced exactly once.
  */
 export function countTokens(branch: BranchEntry[]): { input: number; output: number } {
 	let input = 0;
@@ -166,7 +185,8 @@ export function countTokens(branch: BranchEntry[]): { input: number; output: num
 	for (const e of branch) {
 		if (e.type === "message" && e.message?.role === "assistant") {
 			const u = e.message.usage;
-			input += u.input + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+			// Overwrite so `input` ends as the latest turn's full prompt size.
+			input = u.input + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
 			output += u.output;
 		}
 	}

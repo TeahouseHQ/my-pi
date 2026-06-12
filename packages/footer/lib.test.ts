@@ -5,6 +5,7 @@ import {
 	formatContextBar,
 	formatModelStr,
 	parseGitPorcelainV2,
+	isLinkedWorktree,
 	parseStashCount,
 	thinkingLabel,
 } from "./lib";
@@ -157,6 +158,31 @@ describe("parseStashCount", () => {
 	});
 });
 
+// ── isLinkedWorktree ────────────────────────────────────────────────────────
+
+describe("isLinkedWorktree", () => {
+	it("returns false in the main worktree where dirs match", () => {
+		expect(isLinkedWorktree(".git", ".git")).toBe(false);
+		expect(isLinkedWorktree("/repo/.git", "/repo/.git")).toBe(false);
+	});
+
+	it("returns true in a linked worktree where dirs differ", () => {
+		expect(
+			isLinkedWorktree("/repo/.git/worktrees/feature", "/repo/.git"),
+		).toBe(true);
+	});
+
+	it("ignores trailing whitespace from command output", () => {
+		expect(isLinkedWorktree(".git\n", ".git\n")).toBe(false);
+		expect(isLinkedWorktree("/repo/.git/worktrees/x\n", "/repo/.git\n")).toBe(true);
+	});
+
+	it("returns false when either input is empty", () => {
+		expect(isLinkedWorktree("", ".git")).toBe(false);
+		expect(isLinkedWorktree(".git", "")).toBe(false);
+	});
+});
+
 // ── formatModelStr ─────────────────────────────────────────────────────────
 
 describe("formatModelStr", () => {
@@ -249,9 +275,9 @@ describe("countTokens", () => {
 		expect(countTokens([])).toEqual({ input: 0, output: 0 });
 	});
 
-	it("sums tokens across assistant messages", () => {
+	it("uses the latest turn's input and sums output", () => {
 		const branch = [assistantMsg(100, 200), assistantMsg(50, 75)];
-		expect(countTokens(branch)).toEqual({ input: 150, output: 275 });
+		expect(countTokens(branch)).toEqual({ input: 50, output: 275 });
 	});
 
 	it("ignores non-assistant messages", () => {
@@ -264,11 +290,12 @@ describe("countTokens", () => {
 		expect(countTokens(branch)).toEqual({ input: 10, output: 20 });
 	});
 
-	it("counts cache reads and writes as input tokens", () => {
+	it("counts cache reads and writes in the latest turn's input", () => {
 		// Real-world usage: most prompt tokens land in cacheRead/cacheWrite,
-		// with `input` only the small uncached delta.
+		// with `input` only the small uncached delta.  Input reflects the
+		// latest turn only; output is summed across the session.
 		const branch = [assistantMsg(2, 298, 0, 4356), assistantMsg(2, 752, 4356, 1603)];
-		expect(countTokens(branch)).toEqual({ input: 2 + 4356 + 2 + 4356 + 1603, output: 1050 });
+		expect(countTokens(branch)).toEqual({ input: 2 + 4356 + 1603, output: 1050 });
 	});
 
 	it("treats missing cache fields as zero", () => {
