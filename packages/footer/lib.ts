@@ -140,19 +140,34 @@ export function formatContextBar(
 
 // ── Token counting ─────────────────────────────────────────────────────────
 
-type BranchEntry = {
-	type: string;
-	message?: { role: string; usage: { input: number; output: number } };
+type Usage = {
+	input: number;
+	output: number;
+	cacheRead?: number;
+	cacheWrite?: number;
 };
 
-/** Sum input/output tokens across all assistant messages in a branch. */
+type BranchEntry = {
+	type: string;
+	message?: { role: string; usage: Usage };
+};
+
+/**
+ * Sum input/output tokens across all assistant messages in a branch.
+ *
+ * Input tokens include cache reads and writes: providers report the bulk of
+ * the prompt under `cacheRead`/`cacheWrite`, leaving `input` as only the small
+ * uncached delta.  Counting `input` alone drastically undercounts the real
+ * prompt size.
+ */
 export function countTokens(branch: BranchEntry[]): { input: number; output: number } {
 	let input = 0;
 	let output = 0;
 	for (const e of branch) {
 		if (e.type === "message" && e.message?.role === "assistant") {
-			input += e.message.usage.input;
-			output += e.message.usage.output;
+			const u = e.message.usage;
+			input += u.input + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+			output += u.output;
 		}
 	}
 	return { input, output };

@@ -232,12 +232,12 @@ describe("formatContextBar", () => {
 // ── countTokens ────────────────────────────────────────────────────────────
 
 describe("countTokens", () => {
-	function assistantMsg(input: number, output: number) {
+	function assistantMsg(input: number, output: number, cacheRead = 0, cacheWrite = 0) {
 		return {
 			type: "message" as const,
 			message: {
 				role: "assistant" as const,
-				usage: { input, output },
+				usage: { input, output, cacheRead, cacheWrite },
 			},
 		};
 	}
@@ -261,6 +261,18 @@ describe("countTokens", () => {
 
 	it("ignores entries without a message", () => {
 		const branch = [{ type: "other" }, assistantMsg(10, 20)];
+		expect(countTokens(branch)).toEqual({ input: 10, output: 20 });
+	});
+
+	it("counts cache reads and writes as input tokens", () => {
+		// Real-world usage: most prompt tokens land in cacheRead/cacheWrite,
+		// with `input` only the small uncached delta.
+		const branch = [assistantMsg(2, 298, 0, 4356), assistantMsg(2, 752, 4356, 1603)];
+		expect(countTokens(branch)).toEqual({ input: 2 + 4356 + 2 + 4356 + 1603, output: 1050 });
+	});
+
+	it("treats missing cache fields as zero", () => {
+		const branch = [{ type: "message" as const, message: { role: "assistant", usage: { input: 10, output: 20 } } }];
 		expect(countTokens(branch)).toEqual({ input: 10, output: 20 });
 	});
 });
