@@ -7,6 +7,7 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 | Package | Description |
 |---|---|
 | [**footer**](packages/footer/) | Compact single-line status bar replacing the default footer |
+| [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron to the start of the input prompt |
 
 > Add new packages by creating a folder under `packages/` and registering it in `index.ts`.
 
@@ -28,6 +29,23 @@ model[provider] | branch +2 ~1 ?3 | cwd | ctx: 43% (54.0k/128.0k) | ↑150 ↓27
 | **think: level** | Current thinking level (`off`, `min`, `low`, `med`, `high`, `max`) |
 
 Segments are color-coded: git status turns red when dirty, green when clean, context usage shows in yellow, etc.
+
+## Prompt prefix
+
+Replaces the main editor with a thin subclass that reserves a two-column left
+gutter and paints a `> ` chevron into it on the first line of the prompt:
+
+```
+> type your message here
+```
+
+The editor handles all wrapping and cursor logic against the padded width, so
+the prefix never shifts text or breaks the surrounding box.
+
+The host resets editor padding to the `editorPaddingX` setting (default `0`)
+after the custom editor is installed and on every resize, so the package floors
+padding at two columns to keep a gutter for the chevron — effectively a minimum
+`editorPaddingX` of `2` while it's active.
 
 ## Install
 
