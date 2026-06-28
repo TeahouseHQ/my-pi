@@ -6,7 +6,7 @@
  * All segments joined by " | ".
  */
 
-import type { ExtensionAPI, ThinkingLevelSelectEvent } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import {
 	countTokens,
@@ -56,7 +56,7 @@ async function refreshGitStatus(pi: ExtensionAPI, cwd: string) {
 export function registerFooter(pi: ExtensionAPI) {
 	let thinkingLevel = "off";
 
-	pi.on("thinking_level_select", async (event: ThinkingLevelSelectEvent) => {
+	pi.on("thinking_level_select", async (event) => {
 		thinkingLevel = event.level;
 	});
 

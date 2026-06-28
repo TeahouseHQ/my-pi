@@ -7,13 +7,8 @@
  * prefix never shifts text or breaks the surrounding box.
  */
 
-import {
-	CustomEditor,
-	type EditorTheme,
-	type ExtensionAPI,
-	type KeybindingsManager,
-	type TUI,
-} from "@earendil-works/pi-coding-agent";
+import { CustomEditor, type ExtensionAPI, type KeybindingsManager } from "@earendil-works/pi-coding-agent";
+import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { applyPromptPrefix, PROMPT_PREFIX } from "./lib";
 
 const PREFIX_WIDTH = PROMPT_PREFIX.length; // "> " = 2 visible columns

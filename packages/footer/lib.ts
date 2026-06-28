@@ -164,7 +164,9 @@ type Usage = {
 
 type BranchEntry = {
 	type: string;
-	message?: { role: string; usage: Usage };
+	// `usage` is optional because non-assistant messages (e.g. user messages in
+	// the real SessionEntry union) carry no usage.
+	message?: { role: string; usage?: Usage };
 };
 
 /**
@@ -185,6 +187,7 @@ export function countTokens(branch: BranchEntry[]): { input: number; output: num
 	for (const e of branch) {
 		if (e.type === "message" && e.message?.role === "assistant") {
 			const u = e.message.usage;
+			if (!u) continue;
 			// Overwrite so `input` ends as the latest turn's full prompt size.
 			input = u.input + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
 			output += u.output;

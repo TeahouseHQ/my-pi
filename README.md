@@ -7,6 +7,7 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 | Package | Description |
 |---|---|
 | [**footer**](packages/footer/) | Compact single-line status bar replacing the default footer |
+| [**header**](packages/header/) | Replaces the built-in startup header (Pi version + keybinding hints) with a custom banner |
 | [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron to the start of the input prompt |
 
 > Add new packages by creating a folder under `packages/` and registering it in `index.ts`.
@@ -29,6 +30,39 @@ model[provider] | branch +2 ~1 ?3 | cwd | ctx: 43% (54.0k/128.0k) | ↑150 ↓27
 | **think: level** | Current thinking level (`off`, `min`, `low`, `med`, `high`, `max`) |
 
 Segments are color-coded: git status turns red when dirty, green when clean, context usage shows in yellow, etc.
+
+## Header
+
+Replaces Pi's built-in startup header — the logo, Pi version, and the
+keybinding/command hint block (`interrupt`, `/ commands`, `! bash`, `more`) —
+with a custom component via `ctx.ui.setHeader()`.
+
+Default output (edit `PIKACHU` / `renderHeader()` in `packages/header/index.ts`):
+
+```
+      /\        /\
+     /  \      /  \
+    /    \____/    \
+   |  *  o  o  *  |
+   |      __      |
+    \    (__)    /
+     \___/||\___/
+       |  ||  |
+       |__||__|
+    pika · pi v0.80.2
+```
+
+Ear tips render in `dim` (black), body in `accent` (yellow), and the `*` cheeks
+in red. The Pi version comes from the `VERSION` export.
+
+The loaded-resources listing (AGENTS.md, skills, prompts, extensions) is
+rendered separately and is not affected.
+
+### Just remove the header
+
+For zero-code removal, skip the extension and set `"quietStartup": true` in
+`~/.pi/agent/settings.json` (or `.pi/settings.json`). That hides the built-in
+header entirely.
 
 ## Prompt prefix
 
