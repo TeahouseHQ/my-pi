@@ -29,13 +29,13 @@ The decorative image the header renders in place of the spark art (`CLAUDE_SPARK
 _Avoid_: "logo", "spark" (the spark is the ASCII art the banner replaces), "image" on its own (ambiguous with the source asset)
 
 **Half-block cell**:
-One character cell encoding two vertical pixels via `▀` — top pixel = truecolor foreground, bottom pixel = truecolor background. The unit the banner is drawn in; 12 rows of cells = 24 image pixels tall.
+One character cell encoding two vertical pixels. When both are opaque: `▀`, top pixel = truecolor foreground, bottom pixel = truecolor background. A transparent pixel is left unpainted (the terminal background shows through) — a fully-transparent cell bakes to a space, a half-transparent one to `▀`/`▄` with only the opaque half coloured. The unit the banner is drawn in; two bitmap rows per line (a 24×17 bitmap → 9 rows).
 _Avoid_: "pixel" (a cell is two pixels), "block character" (use only informally)
 
 **Baked artifact**:
-The committed `banner.ts` module (`export const BANNER: string[]`) holding the 12 finished-ANSI lines, produced once by the regen script from the source asset. Imported like `lib.ts` — the shipped extension never decodes the source image at runtime. Emitted with `\u001b` escapes so it stays lint/type-clean inside `npm run check`.
+The committed `banner.ts` module (`export const BANNER: string[]`) holding the finished-ANSI lines, produced once by the regen script from the source asset. Imported like `lib.ts` — the shipped extension never decodes the source image at runtime. Emitted with `\u001b` escapes so it stays lint/type-clean inside `npm run check`.
 _Avoid_: "cache" (implies runtime-populated), "rendered image", "banner asset" (the asset is the source `.jpg`)
 
 **Regen script**:
-`scripts/bake-header-banner.mjs`, run manually via `npm run bake:header` when the source image changes. Plain `.mjs` (outside `check`); its `sharp` decoder is a devDependency only, never a runtime dependency. No drift guard — freshness is manual discipline.
+`scripts/bake-header-banner.mjs`, run manually via `npm run bake:header` when the source image changes. Reconstructs the art bitmap from the source (a photo of pixel art on a grid): auto-detects the grid period/phase from the gridlines, samples the median colour per cell, and flood-fills border-connected white cells to transparent. Plain `.mjs` (outside `check`); its `sharp` decoder is a devDependency only, never a runtime dependency. No drift guard — freshness is manual discipline.
 _Avoid_: "build step" (run on demand, not on every build), "check" (it is deliberately outside `npm run check`)

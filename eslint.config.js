@@ -17,6 +17,8 @@ export default tseslint.config(
 		},
 	},
 	{
-		ignores: ["node_modules/", "dist/"],
+		// scripts/ holds the dev-only regen script (bake:header); it is
+		// deliberately outside `npm run check` (see ADR-0003).
+		ignores: ["node_modules/", "dist/", "scripts/"],
 	},
 );
