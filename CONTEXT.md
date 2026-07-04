@@ -25,8 +25,24 @@ _Avoid_: "history file" (that's the storage detail, not the concept)
 ### Header banner
 
 **Banner**:
-The decorative image the header renders in place of the spark art (`CLAUDE_SPARK`). Fixed, non-configurable, drawn as half-block cells. The `claude · pi vVERSION` subtitle and the resource sections still render below it.
-_Avoid_: "logo", "spark" (the spark is the ASCII art the banner replaces), "image" on its own (ambiguous with the source asset)
+The decorative image the header renders in place of the spark art (`CLAUDE_SPARK`). Fixed, non-configurable, drawn as half-block cells. Sits inside the logo cell, composed horizontally beside the metadata column (see ADR 0005) — it is no longer a standalone block with the subtitle and sections stacked below it.
+_Avoid_: "logo" (that's the whole left cell — banner + wordmark — not the image alone), "spark" (the spark is the ASCII art the banner replaces), "image" on its own (ambiguous with the source asset)
+
+**Logo cell**:
+The fixed-width left region of the header: the banner (sprite) plus the wordmark, drawn as one unit. Clips on its right edge only when the terminal is narrower than the cell itself (ADR 0003's chop behaviour, now scoped to this cell). A vertical divider separates it from the metadata column.
+_Avoid_: "banner" (that's just the sprite inside the cell), "logo" alone when you mean only the sprite
+
+**Wordmark**:
+The code-drawn "Pi" rendered as half-block glyphs beside the sprite, coloured at render time with the theme **accent**. Authored in the header package (inside `npm run check`), not baked into `banner.ts` — decoupled from the regen pipeline so it can follow the theme.
+_Avoid_: "logo" (the logo cell is wordmark + banner), "title" (that's the cwd/version line in the metadata column)
+
+**Divider**:
+The single vertical bar (`│`, theme **dim**) between the logo cell and the metadata column. The only chrome in the header — there is no enclosing frame, no per-section box, no right-anchored decoration (ADR 0005).
+_Avoid_: "border", "frame" (deliberately rejected — those need full-width padding)
+
+**Metadata column**:
+The right region of the header, centred vertically against the taller logo cell: a **title** line (`<~-short cwd>  v<VERSION>`, no `pi`/`claude` prefix) over the `Context`/`Skills`/`Extensions` sections as one-line labelled lists. Theme-coloured; each line truncates independently with an ellipsis as the terminal narrows (empty sections omitted).
+_Avoid_: "subtitle" (the old `claude · pi vVERSION` line it replaces), "sections" alone (they now share the column with the title)
 
 **Half-block cell**:
 One character cell encoding two vertical pixels. When both are opaque: `▀`, top pixel = truecolor foreground, bottom pixel = truecolor background. A transparent pixel is left unpainted (the terminal background shows through) — a fully-transparent cell bakes to a space, a half-transparent one to `▀`/`▄` with only the opaque half coloured. The unit the banner is drawn in; two bitmap rows per line (a 21×20 bitmap → 10 rows).
