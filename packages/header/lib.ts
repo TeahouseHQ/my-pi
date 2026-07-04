@@ -1,15 +1,19 @@
 /**
- * Pure, testable helpers for the header's loaded-resource sections.
+ * Pure, testable helpers behind the header — the loaded-resource sections and
+ * the horizontal-composition layout (ADR-0005).
  *
- * These reproduce Pi's built-in "[Context] / [Skills] / [Extensions]" startup
- * listing (the compact, one-line-per-section form). The logic is ported from
- * Pi's interactive-mode `showLoadedResources()` so labels match what the
- * built-in header prints.
+ * The section helpers reproduce Pi's built-in "[Context] / [Skills] /
+ * [Extensions]" startup listing (the compact, one-line-per-section form), ported
+ * from Pi's interactive-mode `showLoadedResources()` so labels match what the
+ * built-in header prints. The layout helpers ({@link buildMetadataLines},
+ * {@link composeHeader}) assemble the metadata column and composite it beside the
+ * baked sprite as a single horizontal band.
  */
 
 import os from "node:os";
 import path from "node:path";
-import type { SourceInfo } from "@earendil-works/pi-coding-agent";
+import type { SourceInfo, Theme } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 /** Minimal shape we need from a loaded resource (extension/skill/etc.). */
 export interface ResourceRef {
@@ -198,6 +202,83 @@ export function compactList(items: string[], options?: { sort?: boolean }): stri
 export interface ResourceSection {
 	name: string;
 	labels: string[];
+}
+
+/** The slice of {@link Theme} the header composition needs — just colour tagging. */
+export type HeaderTheme = Pick<Theme, "fg">;
+
+/**
+ * The header's title line: the home-shortened working directory over a `v`-prefixed
+ * version, no `pi`/`claude ·` branding (ADR-0005) — e.g. `~/code/my-pi  v1.2.3`.
+ */
+export function formatTitleLine(theme: HeaderTheme, cwd: string, version: string): string {
+	return `${theme.fg("mdHeading", formatDisplayPath(cwd))}  ${theme.fg("dim", `v${version}`)}`;
+}
+
+/** One resource section as a single labelled line — e.g. `Skills  review, tdd`. */
+export function renderSectionLine(theme: HeaderTheme, section: ResourceSection): string {
+	return `${theme.fg("mdHeading", section.name)}  ${theme.fg("dim", section.labels.join(", "))}`;
+}
+
+/**
+ * The metadata column's lines, top to bottom: the cwd+version title over each
+ * resource section as a one-line labelled list (empty sections already omitted
+ * upstream by {@link buildResourceSections}).
+ */
+export function buildMetadataLines(
+	theme: HeaderTheme,
+	input: { cwd: string; version: string; sections: ResourceSection[] },
+): string[] {
+	return [
+		formatTitleLine(theme, input.cwd, input.version),
+		...input.sections.map((section) => renderSectionLine(theme, section)),
+	];
+}
+
+/** Pad a (possibly ANSI-carrying) line on the right to a printed width of `width`. */
+function padLineToWidth(line: string, width: number): string {
+	const printed = visibleWidth(line);
+	return printed >= width ? line : line + " ".repeat(width - printed);
+}
+
+/**
+ * Compose the header as a single horizontal band: a fixed-width logo cell, a
+ * theme-dim `│` divider, and a metadata column (ADR-0005).
+ *
+ * The divider sits at a stable column derived from each sprite row's *printed*
+ * width (`visibleWidth`, not `String.length`) — sprite rows carry ANSI escapes,
+ * so string length is not column width. The metadata block is centred
+ * vertically against the taller sprite.
+ */
+export function composeHeader(
+	theme: HeaderTheme,
+	input: { spriteRows: string[]; metaLines: string[]; width: number },
+): string[] {
+	const { spriteRows, metaLines, width } = input;
+	const cellWidth = Math.max(0, ...spriteRows.map((row) => visibleWidth(row)));
+	// Columns left for the metadata after the cell and the " │ " divider block.
+	const metaAvail = width - cellWidth - 3;
+
+	// Not enough width for the divider block plus a metadata column: keep
+	// ADR-0003's per-region chop — show only the logo cell (clipped on its right
+	// edge with an empty ellipsis, no literal "..." in the image), and drop the
+	// divider entirely rather than dangling a bar with no metadata beside it.
+	if (metaAvail < 1) {
+		return spriteRows.map((row) => truncateToWidth(row, width, ""));
+	}
+
+	const divider = theme.fg("dim", "│");
+	const topPad = Math.floor((spriteRows.length - metaLines.length) / 2);
+
+	return spriteRows.map((row, i) => {
+		const left = padLineToWidth(row, cellWidth);
+		const rawMeta = metaLines[i - topPad] ?? "";
+		// Each metadata line truncates independently with a normal ellipsis as the
+		// terminal narrows — the sections shrink rather than being chopped blindly.
+		const meta = rawMeta ? truncateToWidth(rawMeta, metaAvail) : "";
+		const base = `${left} ${divider}`;
+		return meta ? `${base} ${meta}` : base;
+	});
 }
 
 /**

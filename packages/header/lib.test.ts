@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type { SourceInfo } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
+import os from "node:os";
+import path from "node:path";
 import {
+	buildMetadataLines,
 	buildResourceSections,
 	compactList,
+	composeHeader,
 	formatContextPath,
 	formatDisplayPath,
 	getCompactExtensionLabels,
 	getCompactPathLabel,
 	getShortPath,
 	isPackageSource,
+	type HeaderTheme,
 } from "./lib";
+
+/** Identity theme: `fg` returns text unchanged so tests assert on layout, not colour. */
+const plainTheme: HeaderTheme = { fg: (_color, text) => text };
 
 const localSource = (overrides: Partial<SourceInfo> = {}): SourceInfo => ({
 	path: "",
@@ -190,5 +199,111 @@ describe("buildResourceSections", () => {
 		});
 		expect(sections[0]).toEqual({ name: "Context", labels: ["z.md", "a.md"] });
 		expect(sections[1]).toEqual({ name: "Skills", labels: ["apple", "zebra"] });
+	});
+});
+
+// ── composeHeader ────────────────────────────────────────────────────────────
+
+describe("composeHeader", () => {
+	it("composes each line as `logo cell │ metadata`", () => {
+		const lines = composeHeader(plainTheme, {
+			spriteRows: ["ab", "cd"],
+			metaLines: ["hi"],
+			width: 40,
+		});
+		expect(lines).toEqual(["ab │ hi", "cd │"]);
+	});
+
+	it("aligns the divider to a stable column from each row's printed width", () => {
+		// Both rows print 3 cells wide but have very different String.length.
+		const wide = "\u001b[38;2;1;2;3mabc\u001b[0m";
+		const lines = composeHeader(plainTheme, {
+			spriteRows: [wide, "xyz"],
+			metaLines: ["m1", "m2"],
+			width: 40,
+		});
+		// The printed text before the divider must be the same width on every line.
+		const widthBeforeDivider = (line: string) => visibleWidth(line.slice(0, line.indexOf("│")));
+		expect(widthBeforeDivider(lines[0])).toBe(widthBeforeDivider(lines[1]));
+	});
+
+	it("centres the metadata block vertically against a taller sprite", () => {
+		const lines = composeHeader(plainTheme, {
+			spriteRows: ["a", "b", "c", "d", "e"],
+			metaLines: ["only"],
+			width: 40,
+		});
+		expect(lines).toHaveLength(5);
+		// One meta line among five sprite rows lands on the centre row (index 2).
+		const rowsWithMeta = lines.map((l, i) => (l.includes("only") ? i : -1)).filter((i) => i >= 0);
+		expect(rowsWithMeta).toEqual([2]);
+	});
+
+	it("clips to the logo cell (no divider) when the terminal is narrower than the cell", () => {
+		const lines = composeHeader(plainTheme, {
+			spriteRows: ["abcde", "fghij"],
+			metaLines: ["meta"],
+			width: 3,
+		});
+		expect(lines).toHaveLength(2);
+		for (const line of lines) {
+			expect(line).not.toContain("│");
+			expect(line).not.toContain("meta");
+			expect(visibleWidth(line)).toBeLessThanOrEqual(3);
+		}
+	});
+
+	it("truncates each metadata line independently so the band fits the width", () => {
+		const lines = composeHeader(plainTheme, {
+			spriteRows: ["abc", "abc"],
+			metaLines: ["ok", "abcdefghijklmno"],
+			width: 11, // cell(3) + " │ "(3) leaves 5 columns for metadata
+		});
+		for (const line of lines) {
+			expect(visibleWidth(line)).toBeLessThanOrEqual(11);
+		}
+		// The short line survives intact; the long one is cut, not dropped wholesale.
+		expect(lines[0]).toContain("ok");
+		expect(lines[1]).toContain("│");
+		expect(lines[1]).not.toContain("abcdefghijklmno");
+	});
+
+	it("shows the logo cell alone (no bare divider) when there is no room for metadata", () => {
+		// Width is a couple of columns past the cell — enough for the cell, but not
+		// for the " │ " block plus any metadata. Show the cell, not a dangling bar.
+		const lines = composeHeader(plainTheme, {
+			spriteRows: ["abcde", "fghij"],
+			metaLines: ["meta"],
+			width: 7, // cell(5) + 2 — no space for " │ " + a metadata column
+		});
+		for (const line of lines) {
+			expect(line).not.toContain("│");
+			expect(visibleWidth(line)).toBeLessThanOrEqual(7);
+		}
+	});
+});
+
+// ── buildMetadataLines ───────────────────────────────────────────────────────
+
+describe("buildMetadataLines", () => {
+	it("puts the cwd+version title over one-line labelled sections", () => {
+		const lines = buildMetadataLines(plainTheme, {
+			cwd: "/proj",
+			version: "9.9.9",
+			sections: [
+				{ name: "Skills", labels: ["review", "tdd"] },
+				{ name: "Extensions", labels: ["header"] },
+			],
+		});
+		expect(lines).toEqual(["/proj  v9.9.9", "Skills  review, tdd", "Extensions  header"]);
+	});
+
+	it("home-shortens the cwd in the title line", () => {
+		const lines = buildMetadataLines(plainTheme, {
+			cwd: path.join(os.homedir(), "code", "my-pi"),
+			version: "1.0.0",
+			sections: [],
+		});
+		expect(lines).toEqual(["~/code/my-pi  v1.0.0"]);
 	});
 });

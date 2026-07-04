@@ -26,33 +26,18 @@ import {
 	type ExtensionAPI,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
 import { BANNER } from "./banner";
-import { buildResourceSections, type ResourceSection } from "./lib";
+import { buildMetadataLines, buildResourceSections, composeHeader, type ResourceSection } from "./lib";
 
-/** Render the `[Context]`/`[Skills]`/`[Extensions]` sections within `width`. */
-function renderSections(theme: Theme, width: number, sections: ResourceSection[]): string[] {
-	const lines: string[] = [];
-	for (const section of sections) {
-		lines.push(""); // blank line between banner and each section
-		lines.push(theme.fg("mdHeading", `[${section.name}]`));
-		lines.push(theme.fg("dim", `  ${section.labels.join(", ")}`));
-	}
-	return lines.map((line) => truncateToWidth(line, width));
-}
-
-/** Return one string per header line, each already within `width`. */
-function renderHeader(theme: Theme, width: number, sections: ResourceSection[]): string[] {
-	// Version subtitle, shown below the banner.
-	const subtitle = `${theme.bold(theme.fg("accent", "claude"))} ${theme.fg("dim", "· pi v" + VERSION)}`;
-
-	// Banner rows are pre-rendered half-blocks: clip with an empty ellipsis so a
-	// narrow terminal chops the right edge cleanly (no literal "..." in the
-	// image). truncateToWidth appends a reset at the cut, so no colour bleed.
-	const banner = BANNER.map((line) => truncateToWidth(line, width, ""));
-
-	// Text rows (subtitle + sections) keep normal default-ellipsis truncation.
-	return [...banner, truncateToWidth(subtitle, width), ...renderSections(theme, width, sections)];
+/**
+ * Return one string per header line, each already within `width`. The header is
+ * a single horizontal band — the baked sprite as a fixed logo cell, a theme-dim
+ * `│` divider, and a metadata column (cwd+version title over the resource
+ * sections), composed by {@link composeHeader} (ADR-0005).
+ */
+function renderHeader(theme: Theme, width: number, cwd: string, sections: ResourceSection[]): string[] {
+	const metaLines = buildMetadataLines(theme, { cwd, version: VERSION, sections });
+	return composeHeader(theme, { spriteRows: BANNER, metaLines, width });
 }
 
 /**
@@ -89,7 +74,7 @@ export function registerHeader(pi: ExtensionAPI) {
 
 		ctx.ui.setHeader((_tui, theme) => ({
 			render(width: number): string[] {
-				return renderHeader(theme, width, sections);
+				return renderHeader(theme, width, ctx.cwd, sections);
 			},
 			invalidate() {},
 		}));
