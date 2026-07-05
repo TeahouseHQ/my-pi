@@ -8,17 +8,23 @@ import {
 	buildResourceSections,
 	compactList,
 	composeHeader,
+	composeLogoCell,
+	flipSpriteRows,
 	formatContextPath,
 	formatDisplayPath,
 	getCompactExtensionLabels,
 	getCompactPathLabel,
 	getShortPath,
 	isPackageSource,
+	renderWordmark,
 	type HeaderTheme,
 } from "./lib";
 
 /** Identity theme: `fg` returns text unchanged so tests assert on layout, not colour. */
 const plainTheme: HeaderTheme = { fg: (_color, text) => text };
+
+/** Tagging theme: wraps text in `<color>…</color>` so tests can assert on the colour used. */
+const taggingTheme: HeaderTheme = { fg: (color, text) => `<${color}>${text}</${color}>` };
 
 const localSource = (overrides: Partial<SourceInfo> = {}): SourceInfo => ({
 	path: "",
@@ -202,6 +208,34 @@ describe("buildResourceSections", () => {
 	});
 });
 
+// ── renderWordmark ───────────────────────────────────────────────────────────
+
+describe("renderWordmark", () => {
+	it("colours the code-drawn 'Pi' with the theme accent, not a baked colour", () => {
+		const rows = renderWordmark(taggingTheme);
+		expect(rows.length).toBeGreaterThan(0);
+		for (const row of rows) {
+			expect(row).toContain("<accent>");
+			// No other theme colour leaks in — the whole wordmark follows the accent.
+			expect(row).not.toMatch(/<(?!accent|\/accent)/);
+		}
+	});
+
+	it("folds the 4×4 'Pi' mark (assets/pi.png) into scaled half-block blocks", () => {
+		// The mark is a 4×4 pixel-art grid, each module scaled up and folded into
+		// half-blocks (█ where both folded pixels are opaque, ▀/▄ at the odd-scale
+		// module seams, space otherwise).
+		expect(renderWordmark(plainTheme)).toEqual([
+			"█████████   ",
+			"███▀▀▀███   ",
+			"███   ███   ",
+			"██████   ███",
+			"███▀▀▀   ███",
+			"███      ███",
+		]);
+	});
+});
+
 // ── composeHeader ────────────────────────────────────────────────────────────
 
 describe("composeHeader", () => {
@@ -279,6 +313,87 @@ describe("composeHeader", () => {
 		for (const line of lines) {
 			expect(line).not.toContain("│");
 			expect(visibleWidth(line)).toBeLessThanOrEqual(7);
+		}
+	});
+});
+
+// ── flipSpriteRows ───────────────────────────────────────────────────────────
+
+const stripAnsi = (s: string) => s.replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
+
+describe("flipSpriteRows", () => {
+	it("reverses each row's cells, keeping each colour with its glyph", () => {
+		const row = "[31mA[32mB[33mC[0m";
+		expect(flipSpriteRows([row])).toEqual(["[33mC[32mB[31mA[0m"]);
+	});
+
+	it("mirrors half-block cells left-to-right without swapping top/bottom halves", () => {
+		// A horizontal flip is column-order only: ▀ (top pixel) and ▄ (bottom pixel)
+		// are vertical halves, so they stay themselves — just move to mirrored columns.
+		const row = "[49m [38;2;1;2;3;49m▄[38;2;4;5;6;48;2;7;8;9m▀[0m";
+		const [flipped] = flipSpriteRows([row]);
+		expect(stripAnsi(row)).toBe(" ▄▀");
+		expect(stripAnsi(flipped)).toBe("▀▄ ");
+		// Printed width is unchanged by the mirror.
+		expect(visibleWidth(flipped)).toBe(visibleWidth(row));
+	});
+});
+
+// ── composeLogoCell ──────────────────────────────────────────────────────────
+
+describe("composeLogoCell", () => {
+	it("places the wordmark right of the sprite, vertically centred in the band", () => {
+		const lines = composeLogoCell({
+			spriteRows: ["S0", "S1", "S2", "S3"],
+			wordmarkRows: ["WM"],
+		});
+		expect(lines).toHaveLength(4);
+		// One wordmark row among four sprite rows centres on row 1 (floor((4-1)/2)).
+		const rowsWithWordmark = lines.map((l, i) => (l.includes("WM") ? i : -1)).filter((i) => i >= 0);
+		expect(rowsWithWordmark).toEqual([1]);
+		// The wordmark sits to the right of that row's sprite cell.
+		expect(lines[1]).toMatch(/^S1\s+WM$/);
+		// Sprite-only rows keep the sprite, no wordmark.
+		expect(lines[0]).toContain("S0");
+		expect(lines[3]).toContain("S3");
+	});
+
+	it("aligns the wordmark to a stable column despite ragged sprite widths", () => {
+		// A sprite row carrying ANSI prints narrower than its String.length.
+		const wide = "[38;2;1;2;3mXY[0m"; // prints 2 cells
+		const lines = composeLogoCell({
+			spriteRows: [wide, "ABCDE", "fg"],
+			wordmarkRows: ["m0", "m1"],
+		});
+		// Whatever row a wordmark lands on, it begins at the same printed column —
+		// the cell is padded to the widest sprite row's printed width.
+		const wordmarkCol = (line: string) => visibleWidth(line.slice(0, line.lastIndexOf("m")));
+		const withWordmark = lines.filter((l) => /m[01]$/.test(l));
+		expect(withWordmark.length).toBeGreaterThan(1);
+		const cols = withWordmark.map(wordmarkCol);
+		expect(new Set(cols).size).toBe(1);
+	});
+});
+
+// ── logo cell + header composition (end-to-end) ──────────────────────────────
+
+describe("wordmark within the composed header", () => {
+	it("renders the wordmark inside the logo cell, left of the divider, growing the cell", () => {
+		const sprite = Array.from({ length: 10 }, () => "XXXXX"); // 10 rows, printed width 5
+		const logo = composeLogoCell({ spriteRows: sprite, wordmarkRows: renderWordmark(plainTheme) });
+		const lines = composeHeader(plainTheme, { spriteRows: logo, metaLines: ["title"], width: 120 });
+
+		const wordmarkLine = lines.find((l) => l.includes("█"));
+		expect(wordmarkLine).toBeDefined();
+		// The wordmark glyphs sit to the left of the divider — inside the logo cell.
+		expect(wordmarkLine!.indexOf("█")).toBeLessThan(wordmarkLine!.indexOf("│"));
+		// The cell width grew past the bare sprite (5) to include the wordmark.
+		const dividerCol = visibleWidth(wordmarkLine!.slice(0, wordmarkLine!.indexOf("│")));
+		expect(dividerCol).toBeGreaterThan(5);
+		// No wordmark glyph leaks into the metadata column, right of the divider.
+		for (const line of lines) {
+			const bar = line.indexOf("│");
+			if (bar >= 0) expect(line.slice(bar).includes("█")).toBe(false);
 		}
 	});
 });

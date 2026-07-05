@@ -27,17 +27,26 @@ import {
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
 import { BANNER } from "./banner";
-import { buildMetadataLines, buildResourceSections, composeHeader, type ResourceSection } from "./lib";
+import {
+	buildMetadataLines,
+	buildResourceSections,
+	composeHeader,
+	composeLogoCell,
+	flipSpriteRows,
+	renderWordmark,
+	type ResourceSection,
+} from "./lib";
 
 /**
  * Return one string per header line, each already within `width`. The header is
- * a single horizontal band — the baked sprite as a fixed logo cell, a theme-dim
- * `│` divider, and a metadata column (cwd+version title over the resource
- * sections), composed by {@link composeHeader} (ADR-0005).
+ * a single horizontal band — the logo cell (baked sprite plus the accent-tinted
+ * "Pi" wordmark), a theme-dim `│` divider, and a metadata column (cwd+version
+ * title over the resource sections), composed by {@link composeHeader} (ADR-0005).
  */
 function renderHeader(theme: Theme, width: number, cwd: string, sections: ResourceSection[]): string[] {
+	const logoRows = composeLogoCell({ spriteRows: flipSpriteRows(BANNER), wordmarkRows: renderWordmark(theme) });
 	const metaLines = buildMetadataLines(theme, { cwd, version: VERSION, sections });
-	return composeHeader(theme, { spriteRows: BANNER, metaLines, width });
+	return composeHeader(theme, { spriteRows: logoRows, metaLines, width });
 }
 
 /**

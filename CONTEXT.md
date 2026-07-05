@@ -25,7 +25,7 @@ _Avoid_: "history file" (that's the storage detail, not the concept)
 ### Header banner
 
 **Banner**:
-The decorative image the header renders in place of the spark art (`CLAUDE_SPARK`). Fixed, non-configurable, drawn as half-block cells. Sits inside the logo cell, composed horizontally beside the metadata column (see ADR 0005) — it is no longer a standalone block with the subtitle and sections stacked below it.
+The decorative image the header renders in place of the spark art (`CLAUDE_SPARK`). Fixed, non-configurable, drawn as half-block cells. Mirrored horizontally at render time (the baked artifact is unchanged; each row's cells are reversed). Sits inside the logo cell, composed horizontally beside the metadata column (see ADR 0005) — it is no longer a standalone block with the subtitle and sections stacked below it.
 _Avoid_: "logo" (that's the whole left cell — banner + wordmark — not the image alone), "spark" (the spark is the ASCII art the banner replaces), "image" on its own (ambiguous with the source asset)
 
 **Logo cell**:
@@ -33,7 +33,7 @@ The fixed-width left region of the header: the banner (sprite) plus the wordmark
 _Avoid_: "banner" (that's just the sprite inside the cell), "logo" alone when you mean only the sprite
 
 **Wordmark**:
-The code-drawn "Pi" rendered as half-block glyphs beside the sprite, coloured at render time with the theme **accent**. Authored in the header package (inside `npm run check`), not baked into `banner.ts` — decoupled from the regen pipeline so it can follow the theme.
+The code-drawn "Pi" rendered as half-block glyphs beside the sprite, coloured at render time with the theme **accent**. A 4×4 pixel-art mark (matching `assets/pi.png`) scaled up into half-block form. Authored in the header package (inside `npm run check`), not baked into `banner.ts` — decoupled from the regen pipeline so it can follow the theme.
 _Avoid_: "logo" (the logo cell is wordmark + banner), "title" (that's the cwd/version line in the metadata column)
 
 **Divider**:
