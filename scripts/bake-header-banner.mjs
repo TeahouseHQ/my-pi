@@ -7,9 +7,9 @@
  * and axis-label strips (column numbers along the top, row numbers down the
  * left). This script reconstructs the underlying art bitmap and bakes it into
  * `packages/header/banner.ts` as `export const BANNER: string[]` — finished-ANSI
- * lines of Unicode half-block cells.
+ * lines of Unicode **quadrant cells**, produced by chafa.
  *
- * Decode pipeline (see ADR-0004):
+ * Decode pipeline (see ADR-0004), unchanged by ADR-0006:
  *   1. Detect the uniform light-grey gridlines as full-length straight runs —
  *      a gridline's grey pixels span nearly the whole axis, so the legend's
  *      short internal lines are rejected. Rebuild the regular lattice from the
@@ -25,22 +25,37 @@
  *      so the isolated legend cluster falls away. Interior white cells enclosed
  *      by art (cheeks/eye highlights) stay opaque. Finally trim fully
  *      transparent border rows/columns to the art's bounding box.
- *   4. Print the finished banner as ANSI to stdout so the operator eyeballs the
- *      real render before committing (there is deliberately no drift guard).
+ *
+ * Fold into cells (ADR-0006, height reopened by ADR-0007): the clean alpha
+ * bitmap is written to a temporary PNG and piped to `chafa --symbols quad -f
+ * symbols -c full --size <cols>x<rows> --stretch`. The width is padded to an
+ * even column count and folded 2:1, so each cell covers a true 2-source-column
+ * block — chafa does **not** resample horizontally, so flat fills stay exact and
+ * no solid-fill halo appears on vertical silhouette edges. The **height is
+ * resampled** (each cell covers 4 source rows): ADR-0006 rejected that downscale
+ * to keep every source pixel, ADR-0007 reopens it to halve the row count too.
+ * chafa picks the two colours + the quadrant glyph per cell; its stdout is
+ * captured, the cursor/control sequences it wraps around the art are stripped
+ * (keeping only the SGR + glyph lines), and the result is re-emitted as
+ * `BANNER`. The sprite floats on the terminal background because chafa emits no
+ * background SGR for a transparent cell — `-t`/`--threshold` is deliberately
+ * left at its default.
+ *
+ * `chafa` is a **system binary**, not pinned by `package.json` — install it out
+ * of band, e.g. `brew install chafa`. The preflight below errors clearly if it
+ * is missing.
  *
  * This is dev-only (plain `.mjs`, outside `npm run check`); its `sharp` decoder
- * is a devDependency only and never a runtime dependency.
+ * is a devDependency only, and chafa is a host-binary bake tool — neither is a
+ * runtime dependency.
  *
- * Each character cell encodes two vertical bitmap pixels. When both are opaque
- * it is `▀` (top pixel = truecolor foreground, bottom pixel = truecolor
- * background). Transparent pixels are left unpainted so the terminal background
- * shows through: a fully-transparent cell is a plain space, and a
- * half-transparent cell uses `▀`/`▄` with only the opaque half coloured.
- *
- * The sprite is mirrored horizontally at bake time (ADR-0006). The default
- * reverses the decoded bitmap's columns before the half-block fold, so the
- * baked artifact ships already-oriented and the runtime prints it as-is — no
- * per-draw cell reversal; `--no-flip` bakes it unmirrored instead.
+ * The sprite is mirrored horizontally at bake time (ADR-0006). The flip is
+ * applied to the decoded bitmap's columns **before** chafa, so `banner.ts`
+ * ships the already-oriented quadrant art and the render path prints it as-is —
+ * no per-draw cell reversal (a quadrant glyph has internal left/right columns,
+ * so a render-time flip would also need a glyph-remap table). `--no-flip` bakes
+ * it unmirrored; `--flip` is accepted for explicitness. Pass flags through npm
+ * as `npm run bake:header -- --no-flip`.
  *
  * The generated file emits `\u001b` escape sequences (via JSON.stringify),
  * never raw ESC bytes, so it stays lint- and type-clean inside `check`.
@@ -48,7 +63,9 @@
 
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import sharp from "sharp";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -59,23 +76,33 @@ const OUTPUT = path.join(repoRoot, "packages/header/banner.ts");
 
 /**
  * Bake-time mirror toggle (ADR-0006). The default reverses the decoded bitmap's
- * columns before the fold, so `banner.ts` ships the already-oriented art and the
+ * columns before chafa, so `banner.ts` ships the already-oriented art and the
  * render path prints it as-is with no per-draw cell reversal. `--no-flip` bakes
- * it unmirrored; `--flip` is accepted for explicitness. Pass flags through npm
- * as `npm run bake:header -- --no-flip`.
+ * it unmirrored; `--flip` is accepted for explicitness.
  */
 const flip = !process.argv.slice(2).includes("--no-flip");
-
-const ESC = "";
-const UPPER_HALF = "▀"; // top half painted (foreground), bottom half is background
-const LOWER_HALF = "▄"; // bottom half painted (foreground), top half is background
-const RESET = `${ESC}[0m`;
 
 // A cell reads as background (transparent) when its fill is white AND it is
 // connected to the image border through other white cells. Interior white cells
 // (cheeks, eye highlights) are enclosed by art and stay opaque.
 const WHITE_MIN = 235; // min channel value for a cell fill to read as white
-const ALPHA_THRESHOLD = 128; // a bitmap pixel is transparent below this alpha
+
+/** Preflight: confirm the `chafa` system binary is installed before we bake. */
+function preflightChafa() {
+	const probe = spawnSync("chafa", ["--version"], { encoding: "utf8" });
+	if (probe.error || probe.status !== 0) {
+		console.error(
+			"\x1b[31m\x1b[1mbake:header\x1b[0m: `chafa` is required to fold the banner into quadrant cells (ADR-0006) but was not found on PATH.",
+		);
+		console.error("Install it out of band and re-run, e.g.:");
+		console.error("  brew install chafa");
+		console.error(
+			"(chafa is a host-binary bake tool — it is deliberately not pinned by package.json,",
+		);
+		console.error(" and it never becomes a runtime dependency of the shipped extension.)");
+		process.exit(1);
+	}
+}
 
 /**
  * A pixel that reads as one of the uniform light-grey gridlines — near-neutral
@@ -255,29 +282,60 @@ function boundingBox(opaque, cols, rows) {
 }
 
 /**
- * One half-block cell from a top and bottom pixel (each `[r, g, b, a]`).
- * `38;2` sets the foreground, `48;2` the background, `49` the default
- * (terminal) background — so transparent halves show through.
+ * Run chafa on the temp PNG (the clean alpha bitmap at native resolution) and
+ * return its raw stdout. The bitmap is fed to chafa at **native resolution** — one
+ * source pixel per chafa input pixel — with `--size <cols>x<rows> --stretch`
+ * chosen so each output quadrant cell covers a true 2×2 source block: chafa must
+ * not resample, or it fabricates partial-coverage cells and reintroduces the
+ * solid-fill halos ADR-0006 rejects. `-t`/`--threshold` is deliberately left at
+ * its default (the ADR spike: `-t 0` erases the sprite, `-t 1` over-solidifies).
  */
-function cell([tr, tg, tb, ta], [br, bg, bb, ba]) {
-	const topOpaque = ta >= ALPHA_THRESHOLD;
-	const bottomOpaque = ba >= ALPHA_THRESHOLD;
-	if (!topOpaque && !bottomOpaque) {
-		// Both transparent: a bare space over the default background.
-		return `${ESC}[49m `;
+function chafaQuadrants(cols, rows, tmpPng) {
+	const raw = spawnSync(
+		"chafa",
+		[
+			"--symbols",
+			"quad",
+			"-f",
+			"symbols",
+			"-c",
+			"full",
+			"--size",
+			`${cols}x${rows}`,
+			"--stretch",
+			tmpPng,
+		],
+		{ encoding: "utf8" },
+	);
+	if (raw.error || raw.status !== 0) {
+		throw new Error(
+			`chafa failed (status ${raw.status}): ${raw.stderr || raw.error?.message || "no detail"}`,
+		);
 	}
-	if (topOpaque && bottomOpaque) {
-		return `${ESC}[38;2;${tr};${tg};${tb};48;2;${br};${bg};${bb}m${UPPER_HALF}`;
-	}
-	if (topOpaque) {
-		// Only the top half is painted; bottom half is the default background.
-		return `${ESC}[38;2;${tr};${tg};${tb};49m${UPPER_HALF}`;
-	}
-	// Only the bottom half is painted; top half is the default background.
-	return `${ESC}[38;2;${br};${bg};${bb};49m${LOWER_HALF}`;
+	return raw.stdout;
+}
+
+/**
+ * chafa wraps its symbol output in cursor-hide/show and other non-SGR control
+ * sequences; keep only the styled glyph lines — SGR colour runs (`...m`) and the
+ * printable glyphs/spaces between them. Any CSI whose final byte is not `m`
+ * (e.g. the `?25l`/`?25h` cursor toggles) is dropped; the SGR sequences are
+ * left intact, ESC and all, so JSON.stringify can re-emit them as `\u001b`.
+ * The result is one clean line per banner row.
+ */
+function stripControlSequences(raw) {
+	const stripped = raw.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, (seq) =>
+		seq.endsWith("m") ? seq : "",
+	);
+	return stripped
+		.split(/\r?\n/)
+		.map((line) => line.replace(/[ \t]+$/g, "")) // trim trailing spaces chafa may pad
+		.filter((line, i, arr) => line !== "" || (i > 0 && i < arr.length - 1));
 }
 
 async function bake() {
+	preflightChafa();
+
 	const { data, info } = await sharp(SOURCE).raw().toBuffer({ resolveWithObject: true });
 	const { width: W, height: H, channels: C } = info;
 	const at = (x, y) => {
@@ -320,35 +378,65 @@ async function bake() {
 	const bmpRows = bitmap.length;
 	const bmpCols = bitmap[0].length;
 
-	// Bake-time mirror (ADR-0006): reverse each row's columns before the fold.
-	// The half-block fold pairs vertical pixels, so a horizontal column reversal
-	// commutes through it and reproduces the old render-time cell flip exactly —
-	// `banner.ts` is then printed as-is, no runtime reversal.
+	// Bake-time mirror (ADR-0006): reverse each row's columns before chafa. A
+	// quadrant glyph has internal left/right columns, so a render-time flip would
+	// need a glyph-remap table; flipping the bitmap before the fold avoids that,
+	// and `banner.ts` is then printed as-is.
 	const oriented = flip ? bitmap.map((row) => row.slice().reverse()) : bitmap;
 
-	// Pair vertical bitmap pixels into half-block cells; an odd final row pairs
-	// with a transparent bottom (rendered as an upper half over default bg).
+	// Fold into quadrant cells via chafa at ~11×5 (ADR-0007). Width halves
+	// exactly: pad the bitmap to an even column count so each cell covers a true
+	// 2-source-column block — no horizontal resample, so flat fills stay exact and
+	// no horizontal solid-fill halo appears. Height is resampled: each cell covers
+	// 4 source rows, so chafa averages two source rows per internal pixel. That
+	// vertical downscale is the trade ADR-0006 rejected and ADR-0007 reopens, to
+	// halve the banner's row count as well as its width.
+	const pngCols = bmpCols + (bmpCols % 2);
+	const cellCols = Math.ceil(pngCols / 2);
+	const cellRows = Math.ceil(bmpRows / 4);
 	const TRANSPARENT = [0, 0, 0, 0];
-	const bannerRows = [];
-	for (let r = 0; r < bmpRows; r += 2) {
-		let line = "";
-		for (let c = 0; c < bmpCols; c += 1) {
-			line += cell(oriented[r][c], r + 1 < bmpRows ? oriented[r + 1][c] : TRANSPARENT);
+	const rgba = Buffer.alloc(pngCols * bmpRows * 4); // zeroed → padded px are transparent
+	for (let r = 0; r < bmpRows; r += 1) {
+		for (let c = 0; c < pngCols; c += 1) {
+			const [pr, pg, pb, pa] = c < bmpCols ? oriented[r][c] : TRANSPARENT;
+			const o = (r * pngCols + c) * 4;
+			rgba[o] = pr;
+			rgba[o + 1] = pg;
+			rgba[o + 2] = pb;
+			rgba[o + 3] = pa;
 		}
-		bannerRows.push(line + RESET);
 	}
+	const tmpDir = mkdtempSync(path.join(tmpdir(), "bake-header-"));
+	const tmpPng = path.join(tmpDir, "bitmap.png");
+	try {
+		await sharp(rgba, { raw: { width: pngCols, height: bmpRows, channels: 4 } })
+			.png()
+			.toFile(tmpPng);
 
-	const body = bannerRows.map((row) => `\t${JSON.stringify(row)},`).join("\n");
-	const contents = `/**
+		const raw = chafaQuadrants(cellCols, cellRows, tmpPng);
+		const bannerRows = stripControlSequences(raw);
+		if (bannerRows.length !== cellRows) {
+			throw new Error(
+				`chafa produced ${bannerRows.length} rows, expected ${cellRows} (raw=${JSON.stringify(raw)})`,
+			);
+		}
+
+		const body = bannerRows.map((row) => `\t${JSON.stringify(row)},`).join("\n");
+		const contents = `/**
  * Baked header banner — generated by \`npm run bake:header\`. Do not edit by hand.
  *
- * ${bannerRows.length} finished-ANSI lines of Unicode half-block cells, reconstructed once
- * from the ${bmpCols}×${bmpRows} art grid decoded from the labelled colour-chart source
- * \`packages/header/assets/pokemon.png\`. Imported by the header at runtime; the
- * shipped extension never decodes the source image. The mirror orientation is
- * chosen here (bake flip ${flip ? "on — mirrored" : "off — unmirrored"}), so the
- * render path prints the lines as-is with no runtime flip (ADR-0006). Re-run the
- * regen script and re-commit this file when the source asset changes.
+ * ${bannerRows.length} finished-ANSI lines of Unicode quadrant cells, folded by
+ * chafa (\`--symbols quad\`) from the ${bmpCols}×${bmpRows} art grid decoded out of
+ * the labelled colour-chart source \`packages/header/assets/pokemon.png\`. Width is
+ * padded to even and folded 2:1 (no resample); height is resampled 2:1 to halve
+ * the row count (ADR-0007, reopening ADR-0006). Each cell carries one truecolor
+ * foreground + one truecolor background and a glyph from the 16-member
+ * block-quadrant set; transparent source cells emit no background SGR, so the
+ * sprite floats on the terminal background (ADR-0003 invariant, preserved).
+ * Imported by the header at runtime; the shipped extension never decodes the
+ * source image. The mirror orientation is chosen at bake time (flip ${flip ? "on — mirrored" : "off — unmirrored"}),
+ * so the render path prints the lines as-is with no runtime flip (ADR-0006).
+ * Re-run the regen script and re-commit this file when the source image changes.
  */
 
 export const BANNER: string[] = [
@@ -356,13 +444,16 @@ ${body}
 ];
 `;
 
-	writeFileSync(OUTPUT, contents);
+		writeFileSync(OUTPUT, contents);
 
-	// Preview: print the finished banner so the operator eyeballs the real render.
-	console.log(bannerRows.join("\n"));
-	console.log(
-		`\nBaked ${bannerRows.length} banner rows (${flip ? "mirrored" : "unmirrored"}) from a ${bmpCols}×${bmpRows} art grid → ${path.relative(repoRoot, OUTPUT)}`,
-	);
+		// Preview: print the finished banner so the operator eyeballs the real render.
+		console.log(bannerRows.join("\n"));
+		console.log(
+			`\nBaked ${bannerRows.length} quadrant rows × ${cellCols} cols (${flip ? "mirrored" : "unmirrored"}) from a ${bmpCols}×${bmpRows} art grid → ${path.relative(repoRoot, OUTPUT)}`,
+		);
+	} finally {
+		rmSync(tmpDir, { recursive: true, force: true });
+	}
 }
 
 bake().catch((error) => {

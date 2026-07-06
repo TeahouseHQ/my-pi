@@ -64,6 +64,29 @@ For zero-code removal, skip the extension and set `"quietStartup": true` in
 `~/.pi/agent/settings.json` (or `.pi/settings.json`). That hides the built-in
 header entirely.
 
+### Regenerating the banner
+
+The banner sprite is a baked artifact (`packages/header/banner.ts`) — the
+shipped extension never decodes the source image at runtime. When the source
+chart (`packages/header/assets/pokemon.png`) changes, rebuild it:
+
+```sh
+npm run bake:header
+```
+
+The bake decodes the labelled colour-chart source into a clean alpha bitmap
+(ADR 0004) and folds it into Unicode **quadrant cells** via [`chafa`](https://hpjansson.org/chafa/)
+(ADR 0006). `chafa` is a system binary — it is **not** pinned by `package.json`
+and is never a runtime dependency — so install it out of band first:
+
+```sh
+brew install chafa      # macOS; see https://hpjansson.org/chafa/ for others
+```
+
+The bake prints an ANSI preview of the finished banner so you can eyeball the
+render (including that transparency still floats) before committing. Pass
+`--no-flip` to bake the sprite unmirrored: `npm run bake:header -- --no-flip`.
+
 ## Prompt prefix
 
 Replaces the main editor with a thin subclass that reserves a two-column left

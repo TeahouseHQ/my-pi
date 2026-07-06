@@ -1,5 +1,12 @@
 # Header banner: quadrant glyphs via chafa, with a bake-time mirror toggle
 
+> **Partially superseded by [ADR 0007](0007-header-banner-halve-height-too.md)** —
+> the "keep every source pixel / banner stays 10 rows tall" position is
+> reversed; the banner is now halved in **height** as well as width (5 rows),
+> via a vertical resample. The chafa bake, the quadrant glyph fold, the
+> transparency float invariant, and the bake-time mirror toggle decided here
+> all remain in force.
+
 ADR 0003 established the pre-baked half-block banner (`▀`, one fg + one bg =
 two **vertical** pixels per cell) with no runtime image dependency, and ADR 0004
 switched its source to a labelled colour-chart PNG decoded by `sharp`. This ADR
