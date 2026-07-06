@@ -87,7 +87,7 @@ charts and lossy mid-grey-lattice charts — with no flag and no format
 detection; the structural rules subsume the old colour-keyed ones. Output
 colours are now always the chart author's legend palette, which is the stronger
 reading of "exact". The decoded-vs-legend count comparison stays advisory and
-manual (ADR 0009; the Pikachu chart's own legend miscounts by 3). The banner
+manual (ADR 0009; the Pikachu chart's own legend miscounts by 3). The sprite
 baker is still untouched and still assumes ADR 0004's lossless format — feeding
 it a lossy chart remains unsupported. A chart whose *legend* is damaged or
 unsampleable now poisons every cell it should have anchored; the distance cap

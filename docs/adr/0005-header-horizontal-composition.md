@@ -1,10 +1,10 @@
 # Header layout: horizontal composition — logo, divider, metadata column
 
-ADR 0003 established a **vertical stack**: the banner rows, then a `claude · pi
+ADR 0003 established a **vertical stack**: the sprite rows, then a `claude · pi
 vVERSION` subtitle, then the `[Context]`/`[Skills]`/`[Extensions]` sections, each
 on their own lines below. This ADR redesigns the layout into a **horizontal
-composition** — a fixed **logo cell** on the left (the baked sprite plus a
-code-drawn "Pi" wordmark), a vertical **divider**, and a **metadata column** on
+composition** — a fixed **Banner** on the left (the baked sprite plus a
+code-drawn "Pi" logo), a vertical **divider**, and a **metadata column** on
 the right (a cwd+version title line over the three resource sections, rendered as
 one-line labelled lists). ADR 0003's *rendering substrate* (pre-baked half-block
 cells, geometric transparency, no runtime decode, truecolor assumption) and ADR
@@ -14,18 +14,18 @@ cells, geometric transparency, no runtime decode, truecolor assumption) and ADR
 brand on the left, live session facts on the right — instead of a ~17-line
 scroll of image-then-metadata. `render(width): string[]` still returns finished
 lines, but each line is now assembled from two regions: a fixed-width left cell
-(sprite row + wordmark) and a right region (one metadata line), joined by the
-divider. The sprite is untouched (`banner.ts` from ADR 0004) and keeps its
+(sprite row + logo) and a right region (one metadata line), joined by the
+divider. The sprite is untouched (`sprite.ts` from ADR 0004) and keeps its
 float-on-transparent property — it is placed *beside* text, never boxed or
 flattened.
 
 **Why "fixed logo, right column truncates" — reopening ADR 0003's "chop, not
-reflow".** ADR 0003 clipped the whole banner at the right edge because the right
+reflow".** ADR 0003 clipped the whole sprite at the right edge because the right
 edge was just more Pikachu. Now the right edge carries the information the header
 exists to show (cwd, version, skills, extensions), so a blind right-edge chop
 would destroy exactly what matters. We keep ADR 0003's *no-reflow* stance — there
 is still one layout, never a breakpoint-driven second layout — but apply the chop
-**per region**: the logo cell is fixed and clips only when the terminal is
+**per region**: the Banner is fixed and clips only when the terminal is
 narrower than the logo itself (unchanged ADR-0003 behaviour for the image), while
 each metadata line truncates independently with a normal ellipsis. Narrowing the
 terminal shortens the lists rather than deleting whole sections.
@@ -44,13 +44,13 @@ plain per-line cut.
 **Why theme colours, not the mockup's hardcoded mint.** The header already draws
 through `theme.fg("accent" | "dim" | "mdHeading")` so it tracks the user's chosen
 theme, including light ones; the mockup's fixed mint-on-near-black would render
-washed-out or wrong off its home theme. The new chrome follows suit: the wordmark
+washed-out or wrong off its home theme. The new chrome follows suit: the logo
 uses the theme **accent**, the divider and secondary text use **dim**. The one
 exception is the **sprite**, which stays its baked truecolor yellow — it is a
 fixed image, not chrome, and ADR 0003 already committed to truecolor for it.
 
-**Why a code-drawn wordmark, not a baked one.** "Pi" is text we want to recolour
-with the theme, so baking it into `banner.ts` (fixed colour, re-bake to change)
+**Why a code-drawn logo, not a baked one.** "Pi" is text we want to recolour
+with the theme, so baking it into `sprite.ts` (fixed colour, re-bake to change)
 is the wrong home. It lives as a small hand-authored half-block glyph set in the
 header package — inside `npm run check`, coloured at render time — decoupled from
 the `.mjs` regen pipeline that owns the sprite.
@@ -59,7 +59,7 @@ the `.mjs` regen pipeline that owns the sprite.
 subtitle becomes a title line of `<~-short cwd>  v<VERSION>` — the working
 directory the session is in, plus the version with no `pi ` prefix. This answers
 "where am I / what version" at a glance and drops the `claude ·` branding, which
-the wordmark now carries. The metadata block (title + three sections) is
+the logo now carries. The metadata block (title + three sections) is
 **centred vertically** against the taller sprite so it reads as one balanced
 unit.
 

@@ -1,21 +1,21 @@
-# Header banner: quadrant glyphs via chafa, with a bake-time mirror toggle
+# Header sprite: quadrant glyphs via chafa, with a bake-time mirror toggle
 
 > **Partially superseded by [ADR 0007](0007-header-banner-halve-height-too.md)** —
-> the "keep every source pixel / banner stays 10 rows tall" position is
-> reversed; the banner is now halved in **height** as well as width (5 rows),
+> the "keep every source pixel / sprite stays 10 rows tall" position is
+> reversed; the sprite is now halved in **height** as well as width (5 rows),
 > via a vertical resample. The chafa bake, the quadrant glyph fold, the
 > transparency float invariant, and the bake-time mirror toggle decided here
 > all remain in force.
 
-ADR 0003 established the pre-baked half-block banner (`▀`, one fg + one bg =
+ADR 0003 established the pre-baked half-block sprite (`▀`, one fg + one bg =
 two **vertical** pixels per cell) with no runtime image dependency, and ADR 0004
 switched its source to a labelled colour-chart PNG decoded by `sharp`. This ADR
-records shrinking the banner's on-screen footprint by changing the glyph the
+records shrinking the sprite's on-screen footprint by changing the glyph the
 baked artifact uses — from half-blocks to **quadrant cells** — and the pipeline
 and invariant changes that follow.
 
 **Why a denser glyph, keeping every source pixel — not a true downscale.** The
-goal is a smaller banner, not a lower-fidelity one. Half-blocks pack 1×2 pixels
+goal is a smaller sprite, not a lower-fidelity one. Half-blocks pack 1×2 pixels
 per character cell; the 21×20 art therefore costs 21 cols × 10 rows. A **quadrant
 cell** packs 2×2 pixels, so the *same* 21×20 art — no pixels dropped, no
 resampling — occupies **11 cols × 10 rows**: the total cell count halves
@@ -40,8 +40,8 @@ quadrants deliver with *universal* glyph coverage and no colour-approximation
 beyond the mild per-cell loss below. Sextants/octants only earn their keep if
 the goal is to halve **row height** — and true height-halving requires octants,
 which render as tofu on virtually every terminal/font shipping today. We
-accepted that quadrants leave the banner **10 rows tall** (unchanged): the
-header's *vertical* cost is the same; only the logo cell narrows. Sextants and
+accepted that quadrants leave the sprite **10 rows tall** (unchanged): the
+header's *vertical* cost is the same; only the Banner narrows. Sextants and
 octants remain a one-flag change away (see chafa, below) if row height ever
 becomes the priority.
 
@@ -58,7 +58,7 @@ and red meet approximate. Flat-colour art is the best case for this trade.
 cell, the two colours plus the quadrant glyph whose coverage pattern best
 matches the source is exactly [chafa](https://hpjansson.org/chafa/)'s core
 competency. Rather than re-implement 2-colour quantization and a glyph table in
-the baker, `bake:header` **shells out to `chafa --symbols quad`**. chafa is used
+the baker, `bake:sprite` **shells out to `chafa --symbols quad`**. chafa is used
 purely at bake time — it never enters the shipped extension, so ADR 0003's
 "no runtime image dependency" is untouched; it joins `sharp` as a dev-only tool.
 We keep the ADR 0004 `sharp` decode as a **pre-pass**: chafa faithfully renders
@@ -68,10 +68,10 @@ produces, not the raw chart. Pipeline:
 
 ```
 chart PNG → [sharp: labelled-chart decode, ADR 0004] → clean alpha bitmap
-          → [chafa --symbols quad] → quadrant ANSI → banner.ts
+          → [chafa --symbols quad] → quadrant ANSI → sprite.ts
 ```
 
-The captured chafa stdout is re-emitted as the existing `export const BANNER:
+The captured chafa stdout is re-emitted as the existing `export const SPRITE:
 string[]` of ``-escaped lines, so the artifact stays lint/type-clean
 inside `npm run check` (per ADR 0003). Switching to sextants/octants later is a
 `--symbols` flag change, nothing more.
@@ -129,34 +129,34 @@ pixel → 1 chafa pixel, `--size` set so each quad cell = a true 2×2 source blo
 `--stretch` to defeat aspect adjustment); letting chafa resample would fabricate
 partial-coverage cells and reintroduce solid-fill compositing.
 
-**Why the mirror moves to bake time and becomes a toggle.** The banner is
+**Why the mirror moves to bake time and becomes a toggle.** The sprite is
 mirrored horizontally. Under half-blocks a flip was pure column reversal, so it
 was cheap to do at *render* time (ADR-era glossary: "each row's cells are
 reversed"). A quadrant glyph has internal left/right columns, so a horizontal
 flip additionally requires remapping each glyph to its mirror — no longer free
 at render time. Since a bake step now owns the conversion, we flip the **clean
-bitmap before chafa** instead: `banner.ts` stores the already-oriented art and
+bitmap before chafa** instead: `sprite.ts` stores the already-oriented art and
 the render path merely prints it. And rather than hard-code the orientation, the
-flip is exposed as a **bake-time parameter** to `bake:header` — the chosen
+flip is exposed as a **bake-time parameter** to `bake:sprite` — the chosen
 orientation is baked in. This retires the runtime cell-reversal, the
 per-glyph flip table we would otherwise need, and `lib.test.ts:330`'s
 "mirror half-block cells" assumption.
 
 ## Consequences
 
-The banner narrows from 21 to 11 columns and its cell count halves, but it stays
+The sprite narrows from 21 to 11 columns and its cell count halves, but it stays
 **10 rows tall** — the header's vertical footprint is unchanged; only the logo
 cell gets narrower beside the metadata column (ADR 0005). The baked artifact now
 holds **chafa-produced quadrant ANSI**, mirrored per the bake flag, rather than
 hand-emitted half-block lines; it remains opaque in diffs (per ADR 0003).
 `chafa` becomes a **system-binary** bake dependency (e.g. `brew install chafa`) —
 unlike `sharp` it is *not* pinned by `package.json`, so re-baking requires it be
-installed out of band; note this alongside the `bake:header` command. Runtime
-mirror logic and `lib.test.ts:330` are removed. `npm run bake:header` gains a
+installed out of band; note this alongside the `bake:sprite` command. Runtime
+mirror logic and `lib.test.ts:330` are removed. `npm run bake:sprite` gains a
 flip flag and the chafa stage; there is still no drift guard (per ADR 0003/0004)
 — freshness stays manual discipline, and the on-bake ANSI preview (ADR 0004) is
 how the operator eyeballs the quadrant render, including that transparency still
-floats, before committing. The half-block cell remains in use for the **wordmark**
-(a separate code-drawn mark, glossary "Wordmark"); only the banner sprite moves
+floats, before committing. The half-block cell remains in use for the **logo**
+(a separate code-drawn mark, glossary "Logo"); only the sprite sprite moves
 to quadrants. Reverting to half-blocks, or advancing to sextants/octants, is a
 `--symbols` change plus a re-bake.

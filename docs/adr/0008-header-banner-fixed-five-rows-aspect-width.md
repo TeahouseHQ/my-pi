@@ -1,16 +1,16 @@
-# Header banner: fixed 5-row height, aspect-preserving width
+# Header sprite: fixed 5-row height, aspect-preserving width
 
 > **Reopens one position of [ADR 0007](0007-header-banner-halve-height-too.md)** —
 > the "only the height is resampled, not the width" clause. ADR 0007 left the
 > width as pad-to-even + fold 2:1 (no resample) and resampled only the height.
-> This ADR fixes the banner at **exactly 5 character rows for every source** and
+> This ADR fixes the sprite at **exactly 5 character rows for every source** and
 > derives the width to **preserve the source's aspect ratio**, which reopens
 > horizontal resampling — narrowly, via **nearest-neighbour**, which preserves
 > the hard alpha the float invariant (ADR 0003) depends on. ADR 0007's vertical
 > resample, the chafa quadrant fold, the float invariant, and the bake-time
 > mirror toggle all remain in force.
 
-ADR 0007 halved the banner's height by resampling it 2:1 (`cellRows = ceil(bmpRows/4)`),
+ADR 0007 halved the sprite's height by resampling it 2:1 (`cellRows = ceil(bmpRows/4)`),
 so a 20-row source cost 5 rows but a 13-row source cost 4, a 24-row source cost
 6 — the header's vertical footprint tracked the source. And because the width
 was the source's own column count folded 2:1, a non-square source rendered
@@ -24,7 +24,7 @@ checked in. Five quadrant rows (10 internal pixels tall) is the compact mark the
 operator settled on in ADR 0007 for the 20-row Pikachu; this ADR holds that line
 for *every* source. chafa resamples `bmpRows → 10` internal pixels via the same
 vertical **average** ADR 0007 accepted — the only change is that the target is
-now a constant (`2 × BANNER_ROWS`), not `2 × ceil(bmpRows/4)`.
+now a constant (`2 × SPRITE_ROWS`), not `2 × ceil(bmpRows/4)`.
 
 **Why the width follows the aspect ratio.** "Preserve the aspect ratio of the
 original sprite" means the displayed rectangle — measured in screen pixels, where
@@ -34,11 +34,11 @@ source's `bmpCols/bmpRows`. On a 2:1 character grid, 5 rows of cells occupy
 reproduces a `W/H` source aspect is:
 
 ```
-cellCols = BANNER_ROWS × CHAR_CELL_ASPECT × bmpCols / bmpRows   (= 10 × W/H, with both = 2…5)
+cellCols = SPRITE_ROWS × CHAR_CELL_ASPECT × bmpCols / bmpRows   (= 10 × W/H, with both = 2…5)
 ```
 
 `CHAR_CELL_ASPECT = 2` is the standard monospace ratio. It is also (roughly) what
-the existing banner already implies: the 21×20 Pikachu at 11×5 only looks square
+the existing sprite already implies: the 21×20 Pikachu at 11×5 only looks square
 if `A ≈ 2.1`, so `2` is the honest round number and — conveniently — keeps
 Pikachu at `round(10 × 21/20) = 11` columns, i.e. byte-identical to before.
 
@@ -69,7 +69,7 @@ genuinely demands a different width than the source provides.
 
 ## Consequences
 
-The banner is now **always 5 rows tall**; its width varies with the source's
+The sprite is now **always 5 rows tall**; its width varies with the source's
 aspect ratio (`cellCols = round(10 × bmpCols/bmpRows)`), so a wide sprite renders
 wide and a tall one narrow, honestly, instead of being squashed into the
 source's folded column count. Sources within the native-fit condition (≈20 rows,

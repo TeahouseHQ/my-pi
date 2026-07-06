@@ -1,6 +1,6 @@
 # chart-to-sprite: a general instruction-chart decoder with mark-based transparency
 
-ADR 0004 taught the banner baker to decode one **instruction chart** — a
+ADR 0004 taught the sprite baker to decode one **instruction chart** — a
 labelled colour-chart render where each art cell is a flat colour block stamped
 with a numeric colour code, with a code→colour legend (including per-colour
 counts) in the upper-right and ruler strips (column numbers along the top, row
@@ -63,17 +63,17 @@ passes. This weakens the check for white only, and is accepted.
 
 **Standalone: the baker is untouched.** The two tools now disagree
 semantically (geometric + trim vs. mark-based + full canvas), so extracting a
-shared decode module would couple the frozen banner pipeline (ADRs 0004–0008)
+shared decode module would couple the frozen sprite pipeline (ADRs 0004–0008)
 to a file that evolves with this tool. The lattice detection, mode sampling,
 and `--dedither` escape hatch are ported as copies. If the baker is ever
-rebased onto this tool's decode, that reopens ADR 0004 — the banner's pixels
+rebased onto this tool's decode, that reopens ADR 0004 — the sprite's pixels
 would change.
 
 ## Consequences
 
 A second `scripts/*.mjs` dev tool, outside `npm run check` like the baker, with
 `sharp` remaining devDependency-only and no chafa involvement. Some deliberate
-duplication with `bake-header-banner.mjs` (gridline lattice, cell mode
+duplication with `bake-sprite.mjs` (gridline lattice, cell mode
 sampling, de-dither blur). Verification of the output is manual — the tool
 prints the decoded dimensions, palette, per-colour counts, and an ANSI
 half-block preview — consistent with the repo's no-drift-guard stance. Charts

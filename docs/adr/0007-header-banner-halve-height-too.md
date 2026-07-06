@@ -1,25 +1,25 @@
-# Header banner: halve the height too (vertical resample)
+# Header sprite: halve the height too (vertical resample)
 
 > **One position reopened by [ADR 0008](0008-header-banner-fixed-five-rows-aspect-width.md)**
 > — the "only the height is resampled, not the width" clause. ADR 0008 fixes the
-> banner at exactly 5 rows for every source and derives the width to preserve
+> sprite at exactly 5 rows for every source and derives the width to preserve
 > the source aspect ratio (nearest-neighbour, which preserves the hard alpha this
 > ADR's float argument depends on). The vertical resample, the chafa quadrant
 > fold, the float invariant, and the bake-time mirror all stand.
 
-ADR 0006 shrank the banner's **width** by switching its glyph from half-blocks
+ADR 0006 shrank the sprite's **width** by switching its glyph from half-blocks
 (1×2 px/cell) to **quadrant** cells (2×2 px/cell): the 21×20 art repacks into
 ~11 columns × **10 rows**, halving the cell count while *keeping every source
 pixel* — no resampling. ADR 0006 explicitly left the **height** at 10 rows and
-named "a smaller banner, not a lower-fidelity one" as the goal, framing the
+named "a smaller sprite, not a lower-fidelity one" as the goal, framing the
 repack as fidelity-preserving and rejecting a true downscale. This ADR reopens
-that one position: the banner is now halved in **height as well as width**
+that one position: the sprite is now halved in **height as well as width**
 (~11 columns × **5 rows**), accepting the vertical resample ADR 0006 declined.
 
 **Why reopen the height.** Quadrants halve width cheaply because a quadrant is
 2× wide; but it is only 2× tall too, so a 20-row bitmap still costs 10 rows.
-The width-only halving left the banner feeling tall next to the metadata
-column (ADR 0005) — the logo cell's aspect no longer matched the operator's
+The width-only halving left the sprite feeling tall next to the metadata
+column (ADR 0005) — the Banner's aspect no longer matched the operator's
 expectation of a compact mark. The remaining ways to shorten are all worse on
 *coverage* than resampling: sextants (2×3 → 7 rows) and octants (2×4 → 5 rows)
 need progressively less-supported Unicode — octants are Unicode 16 (2024) and
@@ -61,8 +61,8 @@ survives intact; only ADR 0006's "no downscale" position is reversed.
 
 ## Consequences
 
-The banner narrows from 11×10 to **11×5** — a quarter of the old half-block
-cell count (210 → 55), halving the logo cell's height as well as its width.
+The sprite narrows from 11×10 to **11×5** — a quarter of the old half-block
+cell count (210 → 55), halving the Banner's height as well as its width.
 `chafa --symbols quad` remains the fold; the bake now pads the decoded
 bitmap's width to even (2:1 fold, no resample) and lets chafa resample the
 height 2:1 via `--size <cols>x<rows/4> --stretch`. Colours shift slightly

@@ -1,6 +1,6 @@
-# Header banner: decode a labelled-chart source, retiring the photo pipeline
+# Header sprite: decode a labelled-chart source, retiring the photo pipeline
 
-ADR 0003 established the pre-baked half-block banner and a regen script that
+ADR 0003 established the pre-baked half-block sprite and a regen script that
 reconstructed the art bitmap from a **photo of pixel art on a grid**
 (`assets/pokemon.jpg`). The source asset has since changed shape: it is now a
 **labelled colour-chart render** (`assets/pokemon.png`) — a lossless PNG where
@@ -50,12 +50,12 @@ Interior white cells, enclosed by art, stay opaque. This reuses ADR 0003's
 
 **Verification stays manual, now with a preview.** There is still no drift guard
 (per ADR 0003) — freshness is manual discipline. To make that discipline cheap,
-`bake:header` now prints the finished banner as ANSI to stdout at the end of a
-bake, so the operator eyeballs the actual render before committing `banner.ts`.
+`bake:sprite` now prints the finished sprite as ANSI to stdout at the end of a
+bake, so the operator eyeballs the actual render before committing `sprite.ts`.
 
 ## Consequences
 
-The banner's dimensions follow the new art grid (~21×20 → ~10 half-block rows),
+The sprite's dimensions follow the new art grid (~21×20 → ~10 half-block rows),
 slightly taller than the old 24×17→9. The regen script, `sharp`-as-devDependency,
 `.mjs`-outside-`check`, and no-drift-guard decisions from ADR 0003 are unchanged;
 only the decode internals and the source asset (`pokemon.jpg` → `pokemon.png`)

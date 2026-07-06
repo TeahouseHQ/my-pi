@@ -24,19 +24,19 @@ _Avoid_: "history file" (that's the storage detail, not the concept)
 
 ### Header
 
-> Terminology note (renamed in this session): what the ADRs call the **banner** is now the **sprite**; what they call the **wordmark** is now the **logo**; what they call the **logo cell** is now the **Banner**. ADRs 0003–0013 keep the old words as historical records — map them through this glossary.
+> Terminology note: these were renamed this session — **sprite** was "banner", **logo** was "wordmark", **Banner** was "logo cell". Code, docs, and the ADRs all use the new terms; only the ADR *filenames* (`NNNN-header-banner-*.md`) keep the old slug.
 
 **Sprite**:
 The decorative image the header renders in place of the spark art (`CLAUDE_SPARK`). Fixed, non-configurable at runtime, drawn as **quadrant cells** (a 2×2 block-quadrant glyph per cell; ADR 0006 — previously half-block cells). Width varies with the source aspect × 6 rows (width halved by the quadrant fold, height resampled — ADR 0007/0008, row count set to 6 by ADR 0013). **Mirror orientation is chosen at bake time** (a `bake:sprite` flag flips the bitmap before chafa; ADR 0006) and baked into the artifact — the render path just prints, no longer reversing cells per draw. Sits inside the Banner, composed horizontally beside the metadata column (see ADR 0005) — it is no longer a standalone block with the subtitle and sections stacked below it.
-_Avoid_: "banner" (that's now the whole left cell — sprite + logo — not the image alone; this image was *formerly* called the banner, and the ADRs still do), "spark" (the ASCII art the sprite replaces), "image" alone (ambiguous with the source asset), "half-block sprite" (the sprite is now quadrant cells; half-blocks survive only in the logo)
+_Avoid_: "banner" (that's now the whole left cell — sprite + logo — not the image alone; this image was *formerly* called the banner), "spark" (the ASCII art the sprite replaces), "image" alone (ambiguous with the source asset), "half-block sprite" (the sprite is now quadrant cells; half-blocks survive only in the logo)
 
 **Banner**:
 The fixed-width left region of the header: the **sprite** plus the **logo**, drawn as one unit (`composeBanner`; `bannerRows` at the call site). Clips on its right edge only when the terminal is narrower than the cell itself (ADR 0003's chop behaviour, now scoped to this cell). A vertical divider separates it from the metadata column.
-_Avoid_: "logo cell" (its former name; the ADRs still use it), "sprite" (that's just the image inside the Banner), "logo" alone when you mean only the "Pi" mark inside
+_Avoid_: "logo cell" (its former name), "sprite" (that's just the image inside the Banner), "logo" alone when you mean only the "Pi" mark inside
 
 **Logo**:
 The code-drawn "Pi" rendered as half-block glyphs beside the sprite, coloured at render time with the theme **accent**. A 4×4 pixel-art mark (matching `assets/pi.png`) scaled up into half-block form. Authored in the header package (inside `npm run check`), not baked into `sprite.ts` (authored as `renderLogo`/`LOGO_BITMAP`) — decoupled from the regen pipeline so it can follow the theme.
-_Avoid_: "wordmark" (its former name; the ADRs still use it), "banner"/"sprite" (the whole cell / the image — not this mark), "title" (that's the cwd/version line in the metadata column)
+_Avoid_: "wordmark" (its former name), "banner"/"sprite" (the whole cell / the image — not this mark), "title" (that's the cwd/version line in the metadata column)
 
 **Divider**:
 The single vertical bar (`│`, theme **dim**) between the Banner and the metadata column. The only chrome in the header — there is no enclosing frame, no per-section box, no right-anchored decoration (ADR 0005).
