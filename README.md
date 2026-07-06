@@ -185,6 +185,48 @@ There is **no drift guard** (per ADR 0003/0004) — `banner.ts` is only as fresh
 as the last bake, so re-baking is manual discipline. The stdout preview is how
 you confirm the bake before committing.
 
+## Chart decoding
+
+`scripts/chart-to-sprite.mjs` is a general-purpose extraction tool: any
+**instruction chart** in, the exact sprite bitmap out as a PNG. Unlike the
+bake it has no chafa stage and nothing in the repo consumes its output — it
+exists to turn charts into usable sprite images (ADR 0009).
+
+It accepts a superset of the bake's format (["The source image
+format"](#the-source-image-format)): both the **lossless** rendering described
+there and a **lossy** one (JPEG-artifacted colours, 1px mid-grey lattice, no
+top/left border, rulers outside the grid) decode with no flag and no format
+detection (ADR 0010). The banner bake still requires the lossless rendering.
+
+```sh
+npm run decode:chart -- path/to/chart.png              # → path/to/chart-sprite.png
+npm run decode:chart -- chart.png -o sprite.png        # explicit output path
+npm run decode:chart -- chart.png --dedither           # dithered sources only, as above
+```
+
+The output is the **exact bitmap: 1 chart cell = 1 pixel**, RGBA, on the full
+ruled canvas — a 21×20-cell chart yields a 21×20 px PNG with the sprite exactly
+where the chart places it and non-coded cells transparent. Upscale it losslessly
+with any nearest-neighbour resize.
+
+Two deliberate differences from the banner bake's decode:
+
+- **Transparency is mark-based, not geometric** — a cell is opaque iff it
+  carries a stamped colour code (the stamp's presence is detected, never
+  OCR'd). This survives disconnected sprites and white-coded cells at the
+  sprite's edge, which the bake's flood-fill rule would eat.
+- **The legend is the palette** — the swatch colours are sampled and every
+  stamped cell snaps to its nearest swatch (white is implicitly a member: its
+  swatch is indistinguishable from the paper), so the output always ships the
+  chart author's palette even when the source is compression-noisy. A cell
+  too far from every swatch aborts the decode. The legend's per-colour
+  **counts** are *not* enforced — the tool prints its own counts for you to
+  eyeball against the legend. Charts with author miscounts still decode.
+
+The ruler strips must be present — the tool asserts the first grid row/column
+look like rulers (white, numbered) and errors otherwise, rather than emitting a
+shifted sprite.
+
 ## Prompt prefix
 
 Replaces the main editor with a thin subclass that reserves a two-column left

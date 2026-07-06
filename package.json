@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest run packages/",
     "bake:header": "node scripts/bake-header-banner.mjs",
+    "decode:chart": "node scripts/chart-to-sprite.mjs",
     "lint": "eslint .",
     "types": "tsc --noEmit",
     "check": "npm run lint && npm run types && npm test"

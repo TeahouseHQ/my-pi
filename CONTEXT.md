@@ -59,3 +59,25 @@ _Avoid_: "cache" (implies runtime-populated), "rendered image", "banner asset" (
 **Regen script**:
 `scripts/bake-header-banner.mjs`, run manually via `npm run bake:header` when the source image changes. Reconstructs the art bitmap from the source (a labelled colour-chart render: flat colour cells stamped with numeric codes, plus a legend and axis-label strips): detects the uniform grey gridlines directly and takes cell centres between them, samples the mode (most-common pixel) colour per cell — the fill outvotes the stamped digit — and flood-fills border-connected white to transparent (removing the axis strips too), keeping only the largest connected component so the legend falls away. Since ADR 0006 that clean alpha bitmap is then **piped to `chafa --symbols quad`** to fold it into quadrant-cell ANSI (chafa picks the two colours + glyph per cell); an optional **bake flag mirrors the bitmap before chafa**. Prints an ANSI preview to stdout on bake for eyeballing. Plain `.mjs` (outside `check`); its `sharp` decoder is a devDependency only, never a runtime dependency, and **`chafa` is a system-binary bake tool** (e.g. `brew install chafa`, not pinned by `package.json`) — likewise never a runtime dependency. No drift guard — freshness is manual discipline.
 _Avoid_: "build step" (run on demand, not on every build), "check" (it is deliberately outside `npm run check`)
+
+### Chart decoding
+
+**Instruction chart**:
+The labelled colour-chart format both decoders read: each art cell is a flat colour block stamped with a numeric colour code, plus **ruler bands** (column numbers along the top, row numbers down the left), and a code→colour **legend** with per-colour counts on the right. Dimensions vary per chart; the grey gridline lattice is the invariant. Two renderings are known (ADR 0010): the **lossless** one (flat truecolour, light-grey 2px lattice, outer border drawn — the only one the banner baker accepts, ADR 0004) and the **lossy** one (JPEG-artifacted colours, 1px mid-grey lattice, no top/left border). `decode:chart` handles both with no flag; the baker still requires lossless.
+_Avoid_: "chart" alone (ambiguous), "source image" (that's the role it plays for the banner pipeline specifically), "template"
+
+**Sprite PNG**:
+The output of `decode:chart` (`scripts/chart-to-sprite.mjs`): an exact 1-cell-=-1-pixel RGBA bitmap of the chart's art, on the **full ruled canvas** — the sprite sits where the chart places it, blank cells are transparent pixels, no bounding-box trim (ADR 0009). Pixel colours are the legend's swatch colours via the **palette snap** (ADR 0010), not raw cell samples. Written to `<input>-sprite.png` by default, so the source is never clobbered.
+_Avoid_: "bitmap" alone (the baker's internal intermediate is also a bitmap), "thumbnail", "export"
+
+**Mark-based transparency**:
+The `decode:chart` opacity rule: a cell is opaque iff it carries a stamped code — detected as a high-contrast minority of interior pixels against the mode fill, never parsed as a digit. Contrast with the baker's **geometric** rule (flood-fill border-connected white + largest component, ADR 0004), which this tool rejects because it drops disconnected sprite parts and eats border-touching white-coded cells. The two tools deliberately disagree (ADR 0009).
+_Avoid_: "OCR" (nothing is read as a digit), "digit detection" (the mark's presence matters, not its value)
+
+**Ruler band**:
+The row of column numbers and column of row numbers framing the art — white cells stamped with digits. In the lossless rendering they sit *inside* the detected lattice (first row/column, dropped from the sprite); in the lossy rendering the chart has no top/left border, so they sit one period *outside* the lattice and are verified in place (ADR 0010). Either way a conforming ruler must be found, or the decode errors rather than shipping a shifted sprite.
+_Avoid_: "axis-label strips" (the baker-era term for the same thing; here they are a named, asserted structure), "header row/column"
+
+**Palette snap**:
+The `decode:chart` colour rule (ADR 0010, superseding ADR 0009's exact-match palette *check*): the legend swatches ∪ {white} are the canonical palette — white is implicit because the white swatch is unsamplable against the paper — and every stamped cell snaps to its nearest entry, shipping the swatch colour rather than the (possibly noisy) cell sample. A cell farther than the snap cap from every entry aborts the decode; on a lossless chart every snap distance is 0. Colours only; the legend's counts are never parsed (no OCR) — the tool prints its own per-colour counts for manual comparison against the legend.
+_Avoid_: "palette check" (the retired exact-match rule), "validation" alone (too broad), "count check" (explicitly not done), "quantisation" (cells snap to the author's palette, not a computed one)
