@@ -8,14 +8,14 @@ import {
 	buildResourceSections,
 	compactList,
 	composeHeader,
-	composeLogoCell,
+	composeBanner,
 	formatContextPath,
 	formatDisplayPath,
 	getCompactExtensionLabels,
 	getCompactPathLabel,
 	getShortPath,
 	isPackageSource,
-	renderWordmark,
+	renderLogo,
 	type HeaderTheme,
 } from "./lib";
 
@@ -207,15 +207,15 @@ describe("buildResourceSections", () => {
 	});
 });
 
-// ── renderWordmark ───────────────────────────────────────────────────────────
+// ── renderLogo ───────────────────────────────────────────────────────────
 
-describe("renderWordmark", () => {
+describe("renderLogo", () => {
 	it("colours the code-drawn 'Pi' with the theme accent, not a baked colour", () => {
-		const rows = renderWordmark(taggingTheme);
+		const rows = renderLogo(taggingTheme);
 		expect(rows.length).toBeGreaterThan(0);
 		for (const row of rows) {
 			expect(row).toContain("<accent>");
-			// No other theme colour leaks in — the whole wordmark follows the accent.
+			// No other theme colour leaks in — the whole logo follows the accent.
 			expect(row).not.toMatch(/<(?!accent|\/accent)/);
 		}
 	});
@@ -224,7 +224,7 @@ describe("renderWordmark", () => {
 		// The mark is a 4×4 pixel-art grid, each module scaled up and folded into
 		// half-blocks (█ where both folded pixels are opaque, ▀/▄ at the odd-scale
 		// module seams, space otherwise).
-		expect(renderWordmark(plainTheme)).toEqual([
+		expect(renderLogo(plainTheme)).toEqual([
 			"█████████   ",
 			"███▀▀▀███   ",
 			"███   ███   ",
@@ -238,7 +238,7 @@ describe("renderWordmark", () => {
 // ── composeHeader ────────────────────────────────────────────────────────────
 
 describe("composeHeader", () => {
-	it("composes each line as `logo cell │ metadata`", () => {
+	it("composes each line as `Banner │ metadata`", () => {
 		const lines = composeHeader(plainTheme, {
 			spriteRows: ["ab", "cd"],
 			metaLines: ["hi"],
@@ -272,7 +272,7 @@ describe("composeHeader", () => {
 		expect(rowsWithMeta).toEqual([2]);
 	});
 
-	it("clips to the logo cell (no divider) when the terminal is narrower than the cell", () => {
+	it("clips to the Banner (no divider) when the terminal is narrower than the cell", () => {
 		const lines = composeHeader(plainTheme, {
 			spriteRows: ["abcde", "fghij"],
 			metaLines: ["meta"],
@@ -301,7 +301,7 @@ describe("composeHeader", () => {
 		expect(lines[1]).not.toContain("abcdefghijklmno");
 	});
 
-	it("shows the logo cell alone (no bare divider) when there is no room for metadata", () => {
+	it("shows the Banner alone (no bare divider) when there is no room for metadata", () => {
 		// Width is a couple of columns past the cell — enough for the cell, but not
 		// for the " │ " block plus any metadata. Show the cell, not a dangling bar.
 		const lines = composeHeader(plainTheme, {
@@ -316,58 +316,58 @@ describe("composeHeader", () => {
 	});
 });
 
-// ── composeLogoCell ──────────────────────────────────────────────────────────
+// ── composeBanner ──────────────────────────────────────────────────────────
 
-describe("composeLogoCell", () => {
-	it("places the wordmark right of the sprite, vertically centred in the band", () => {
-		const lines = composeLogoCell({
+describe("composeBanner", () => {
+	it("places the logo right of the sprite, vertically centred in the band", () => {
+		const lines = composeBanner({
 			spriteRows: ["S0", "S1", "S2", "S3"],
-			wordmarkRows: ["WM"],
+			logoRows: ["WM"],
 		});
 		expect(lines).toHaveLength(4);
-		// One wordmark row among four sprite rows centres on row 1 (floor((4-1)/2)).
-		const rowsWithWordmark = lines.map((l, i) => (l.includes("WM") ? i : -1)).filter((i) => i >= 0);
-		expect(rowsWithWordmark).toEqual([1]);
-		// The wordmark sits to the right of that row's sprite cell.
+		// One logo row among four sprite rows centres on row 1 (floor((4-1)/2)).
+		const rowsWithLogo = lines.map((l, i) => (l.includes("WM") ? i : -1)).filter((i) => i >= 0);
+		expect(rowsWithLogo).toEqual([1]);
+		// The logo sits to the right of that row's sprite cell.
 		expect(lines[1]).toMatch(/^S1\s+WM$/);
-		// Sprite-only rows keep the sprite, no wordmark.
+		// Sprite-only rows keep the sprite, no logo.
 		expect(lines[0]).toContain("S0");
 		expect(lines[3]).toContain("S3");
 	});
 
-	it("aligns the wordmark to a stable column despite ragged sprite widths", () => {
+	it("aligns the logo to a stable column despite ragged sprite widths", () => {
 		// A sprite row carrying ANSI prints narrower than its String.length.
 		const wide = "[38;2;1;2;3mXY[0m"; // prints 2 cells
-		const lines = composeLogoCell({
+		const lines = composeBanner({
 			spriteRows: [wide, "ABCDE", "fg"],
-			wordmarkRows: ["m0", "m1"],
+			logoRows: ["m0", "m1"],
 		});
-		// Whatever row a wordmark lands on, it begins at the same printed column —
+		// Whatever row a logo lands on, it begins at the same printed column —
 		// the cell is padded to the widest sprite row's printed width.
-		const wordmarkCol = (line: string) => visibleWidth(line.slice(0, line.lastIndexOf("m")));
-		const withWordmark = lines.filter((l) => /m[01]$/.test(l));
-		expect(withWordmark.length).toBeGreaterThan(1);
-		const cols = withWordmark.map(wordmarkCol);
+		const logoCol = (line: string) => visibleWidth(line.slice(0, line.lastIndexOf("m")));
+		const withLogo = lines.filter((l) => /m[01]$/.test(l));
+		expect(withLogo.length).toBeGreaterThan(1);
+		const cols = withLogo.map(logoCol);
 		expect(new Set(cols).size).toBe(1);
 	});
 });
 
-// ── logo cell + header composition (end-to-end) ──────────────────────────────
+// ── Banner + header composition (end-to-end) ──────────────────────────────
 
-describe("wordmark within the composed header", () => {
-	it("renders the wordmark inside the logo cell, left of the divider, growing the cell", () => {
+describe("logo within the composed header", () => {
+	it("renders the logo inside the Banner, left of the divider, growing the cell", () => {
 		const sprite = Array.from({ length: 10 }, () => "XXXXX"); // 10 rows, printed width 5
-		const logo = composeLogoCell({ spriteRows: sprite, wordmarkRows: renderWordmark(plainTheme) });
+		const logo = composeBanner({ spriteRows: sprite, logoRows: renderLogo(plainTheme) });
 		const lines = composeHeader(plainTheme, { spriteRows: logo, metaLines: ["title"], width: 120 });
 
-		const wordmarkLine = lines.find((l) => l.includes("█"));
-		expect(wordmarkLine).toBeDefined();
-		// The wordmark glyphs sit to the left of the divider — inside the logo cell.
-		expect(wordmarkLine!.indexOf("█")).toBeLessThan(wordmarkLine!.indexOf("│"));
-		// The cell width grew past the bare sprite (5) to include the wordmark.
-		const dividerCol = visibleWidth(wordmarkLine!.slice(0, wordmarkLine!.indexOf("│")));
+		const logoLine = lines.find((l) => l.includes("█"));
+		expect(logoLine).toBeDefined();
+		// The logo glyphs sit to the left of the divider — inside the Banner.
+		expect(logoLine!.indexOf("█")).toBeLessThan(logoLine!.indexOf("│"));
+		// The cell width grew past the bare sprite (5) to include the logo.
+		const dividerCol = visibleWidth(logoLine!.slice(0, logoLine!.indexOf("│")));
 		expect(dividerCol).toBeGreaterThan(5);
-		// No wordmark glyph leaks into the metadata column, right of the divider.
+		// No logo glyph leaks into the metadata column, right of the divider.
 		for (const line of lines) {
 			const bar = line.indexOf("│");
 			if (bar >= 0) expect(line.slice(bar).includes("█")).toBe(false);

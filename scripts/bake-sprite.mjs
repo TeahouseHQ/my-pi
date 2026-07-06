@@ -1,8 +1,8 @@
 /**
- * Regen script for the header banner (run manually via `npm run bake:header`).
+ * Regen script for the header sprite (run manually via `npm run bake:sprite`).
  *
- * Bakes a source **instruction chart** into `packages/header/banner.ts` as
- * `export const BANNER: string[]` — finished-ANSI lines of Unicode **quadrant
+ * Bakes a source **instruction chart** into `packages/header/sprite.ts` as
+ * `export const SPRITE: string[]` — finished-ANSI lines of Unicode **quadrant
  * cells**, produced by chafa.
  *
  * Since ADR 0012 the baker no longer decodes the chart itself. All the
@@ -10,17 +10,17 @@
  * sampling, mark/geometry transparency, palette snap, dedither) now lives in
  * `decode:chart` (`scripts/chart-to-sprite.mjs`, ADR 0009/0010). The baker
  * shells out to that command, reads back the **sprite PNG** it emits — an exact
- * RGBA bitmap on the full ruled canvas — and does only the banner-specific work
+ * RGBA bitmap on the full ruled canvas — and does only the sprite-specific work
  * on that clean bitmap:
  *
  *   1. Trim the fully-transparent border rows/columns to the art's bounding box
  *      (decode deliberately does *not* trim — it keeps the sprite positioned on
  *      the ruled canvas; ADR 0009 assigns the trim to the baker).
  *   2. Bake-time mirror (ADR 0006): reverse each row's columns before chafa, so
- *      `banner.ts` ships the already-oriented art and the render path prints it
+ *      `sprite.ts` ships the already-oriented art and the render path prints it
  *      as-is (a quadrant glyph has internal left/right columns, so a render-time
  *      flip would need a glyph-remap table). `--no-flip` bakes it unmirrored.
- *   3. Scale to a **fixed 6-row** banner whose width preserves the source aspect
+ *   3. Scale to a **fixed 6-row** sprite whose width preserves the source aspect
  *      ratio on a ~2:1 character grid (ADR 0008): width is **nearest-neighbour**
  *      resampled to 2×cellCols internal pixels — nearest (not averaging) copies
  *      each source pixel's alpha verbatim, so the hard opaque/transparent
@@ -34,11 +34,11 @@
  *      it picks the two colours + the quadrant glyph per cell. Its stdout is
  *      captured, the cursor/control sequences it wraps around the art are
  *      stripped (keeping only the SGR + glyph lines), and the result is
- *      re-emitted as `BANNER`. The sprite floats on the terminal background
+ *      re-emitted as `SPRITE`. The sprite floats on the terminal background
  *      because chafa emits no background SGR for a transparent cell —
  *      `-t`/`--threshold` is deliberately left at its default.
  *
- * CLI: `npm run bake:header -- [<chart.png>] [--scale N] [--dedither] [--no-flip]`.
+ * CLI: `npm run bake:sprite -- [<chart.png>] [--scale N] [--dedither] [--no-flip]`.
  * The source chart is an arbitrary path (defaults to the committed
  * `packages/header/assets/pokemon.png`). `--scale` and `--dedither` are passed
  * straight through to `decode:chart` — `--scale N` controls the intermediate
@@ -69,27 +69,27 @@ const repoRoot = path.resolve(scriptDir, "..");
 
 const DECODE_SCRIPT = path.join(scriptDir, "chart-to-sprite.mjs");
 const DEFAULT_SOURCE = path.join(repoRoot, "packages/header/assets/pokemon.png");
-const OUTPUT = path.join(repoRoot, "packages/header/banner.ts");
+const OUTPUT = path.join(repoRoot, "packages/header/sprite.ts");
 
 /**
- * Fixed banner height in character rows (ADR 0008, row count revised to 6 by
+ * Fixed sprite height in character rows (ADR 0008, row count revised to 6 by
  * ADR 0013): every source scales to this many rows regardless of its native
  * height, so the header's vertical cost is stable.
  */
-const BANNER_ROWS = 6;
+const SPRITE_ROWS = 6;
 /**
  * Terminal character-cell aspect ratio (height ÷ width). Standard monospace
  * fonts are ~2:1 (a cell is about twice as tall as wide); the existing 11×5
  * Pikachu implies ~2.1, so 2 is the honest round number and keeps Pikachu at 11
  * cols. Used to derive the column count that reproduces the source aspect at a
- * fixed 6-row height: cellCols = BANNER_ROWS × CHAR_CELL_ASPECT × W/H.
+ * fixed 6-row height: cellCols = SPRITE_ROWS × CHAR_CELL_ASPECT × W/H.
  */
 const CHAR_CELL_ASPECT = 2;
 
 function usage(message) {
-	if (message) console.error(`bake:header: ${message}`);
+	if (message) console.error(`bake:sprite: ${message}`);
 	console.error(
-		"Usage: npm run bake:header -- [<chart.png>] [--scale <1-32>] [--dedither] [--no-flip]",
+		"Usage: npm run bake:sprite -- [<chart.png>] [--scale <1-32>] [--dedither] [--no-flip]",
 	);
 	process.exit(1);
 }
@@ -129,7 +129,7 @@ function preflightChafa() {
 	const probe = spawnSync("chafa", ["--version"], { encoding: "utf8" });
 	if (probe.error || probe.status !== 0) {
 		console.error(
-			"\x1b[31m\x1b[1mbake:header\x1b[0m: `chafa` is required to fold the banner into quadrant cells (ADR 0006) but was not found on PATH.",
+			"\x1b[31m\x1b[1mbake:sprite\x1b[0m: `chafa` is required to fold the sprite into quadrant cells (ADR 0006) but was not found on PATH.",
 		);
 		console.error("Install it out of band and re-run, e.g.:");
 		console.error("  brew install chafa");
@@ -228,7 +228,7 @@ function chafaQuadrants(cols, rows, tmpPng) {
  * printable glyphs/spaces between them. Any CSI whose final byte is not `m`
  * (e.g. the `?25l`/`?25h` cursor toggles) is dropped; the SGR sequences are
  * left intact, ESC and all, so JSON.stringify can re-emit them as `\u001b`.
- * The result is one clean line per banner row.
+ * The result is one clean line per sprite row.
  */
 function stripControlSequences(raw) {
 	const stripped = raw.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, (seq) =>
@@ -276,15 +276,15 @@ async function bake() {
 		// Bake-time mirror (ADR 0006): reverse each row's columns before chafa. A
 		// quadrant glyph has internal left/right columns, so a render-time flip would
 		// need a glyph-remap table; flipping the bitmap before the fold avoids that,
-		// and `banner.ts` is then printed as-is.
+		// and `sprite.ts` is then printed as-is.
 		const oriented = flip ? bitmap.map((row) => row.slice().reverse()) : bitmap;
 
-		// Scale to a fixed 6-row banner whose width preserves the source aspect
+		// Scale to a fixed 6-row sprite whose width preserves the source aspect
 		// ratio on a ~2:1 character grid (ADR 0008, row count revised to 6 by
 		// ADR 0013, reopening ADR 0007's width clause). A quadrant cell packs a 2×2
 		// block, so 6 character rows need 12 internal pixels tall; the column count
 		// that reproduces the source W/H aspect on 2:1-tall character cells is
-		// cellCols = BANNER_ROWS × CHAR_CELL_ASPECT × bmpCols/bmpRows. Two width
+		// cellCols = SPRITE_ROWS × CHAR_CELL_ASPECT × bmpCols/bmpRows. Two width
 		// paths, both float-safe:
 		//   • Native fit (targetW is bmpCols, or bmpCols+1 for an odd source): the
 		//     source already matches the aspect target, so no resample — copy direct
@@ -298,10 +298,10 @@ async function bake() {
 		//     the solid-fill halo ADR 0006 rejects.
 		// Height always keeps chafa's averaging resample (bmpRows → 12 internal) — the
 		// vertical downscale ADR 0007 accepted. (--stretch makes our aspect win.)
-		const cellRows = BANNER_ROWS;
+		const cellRows = SPRITE_ROWS;
 		const cellCols = Math.max(
 			1,
-			Math.round((BANNER_ROWS * CHAR_CELL_ASPECT * bmpCols) / bmpRows),
+			Math.round((SPRITE_ROWS * CHAR_CELL_ASPECT * bmpCols) / bmpRows),
 		);
 		const targetW = cellCols * 2;
 		const nativeFit = targetW === bmpCols + (bmpCols % 2); // exact, or odd→+1 pad
@@ -329,22 +329,22 @@ async function bake() {
 			.toFile(tmpPng);
 
 		const raw = chafaQuadrants(cellCols, cellRows, tmpPng);
-		const bannerRows = stripControlSequences(raw);
-		if (bannerRows.length !== cellRows) {
+		const spriteRows = stripControlSequences(raw);
+		if (spriteRows.length !== cellRows) {
 			throw new Error(
-				`chafa produced ${bannerRows.length} rows, expected ${cellRows} (raw=${JSON.stringify(raw)})`,
+				`chafa produced ${spriteRows.length} rows, expected ${cellRows} (raw=${JSON.stringify(raw)})`,
 			);
 		}
 
-		const body = bannerRows.map((row) => `\t${JSON.stringify(row)},`).join("\n");
+		const body = spriteRows.map((row) => `\t${JSON.stringify(row)},`).join("\n");
 		const sourceRel = path.relative(repoRoot, source);
 		const contents = `/**
- * Baked header banner — generated by \`npm run bake:header\`. Do not edit by hand.
+ * Baked header sprite — generated by \`npm run bake:sprite\`. Do not edit by hand.
  *
- * ${bannerRows.length} finished-ANSI lines of Unicode quadrant cells, folded by
+ * ${spriteRows.length} finished-ANSI lines of Unicode quadrant cells, folded by
  * chafa (\`--symbols quad\`) from the ${bmpCols}×${bmpRows} sprite bitmap that
  * \`decode:chart\` extracts from the source chart \`${sourceRel}\` (ADR 0012). The
- * art is scaled to a fixed ${BANNER_ROWS}-row banner whose width preserves the source aspect
+ * art is scaled to a fixed ${SPRITE_ROWS}-row sprite whose width preserves the source aspect
  * ratio on a ~2:1 character grid: width is nearest-neighbour resampled (hard
  * alpha preserved, so the float survives), height is averaging-resampled
  * (ADR 0008, reopening ADR 0007). Each cell carries one truecolor
@@ -357,17 +357,17 @@ async function bake() {
  * Re-run the regen script and re-commit this file when the source image changes.
  */
 
-export const BANNER: string[] = [
+export const SPRITE: string[] = [
 ${body}
 ];
 `;
 
 		writeFileSync(OUTPUT, contents);
 
-		// Preview: print the finished banner so the operator eyeballs the real render.
-		console.log(`\n${bannerRows.join("\n")}`);
+		// Preview: print the finished sprite so the operator eyeballs the real render.
+		console.log(`\n${spriteRows.join("\n")}`);
 		console.log(
-			`\nBaked ${bannerRows.length} quadrant rows × ${cellCols} cols (${flip ? "mirrored" : "unmirrored"}) from a ${bmpCols}×${bmpRows} sprite bitmap → ${path.relative(repoRoot, OUTPUT)}`,
+			`\nBaked ${spriteRows.length} quadrant rows × ${cellCols} cols (${flip ? "mirrored" : "unmirrored"}) from a ${bmpCols}×${bmpRows} sprite bitmap → ${path.relative(repoRoot, OUTPUT)}`,
 		);
 	} finally {
 		rmSync(tmpDir, { recursive: true, force: true });

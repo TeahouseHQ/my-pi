@@ -7,7 +7,7 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 | Package | Description |
 |---|---|
 | [**footer**](packages/footer/) | Compact single-line status bar replacing the default footer |
-| [**header**](packages/header/) | Replaces the built-in startup header (Pi version + keybinding hints) with a custom banner |
+| [**header**](packages/header/) | Replaces the built-in startup header (Pi version + keybinding hints) with a custom sprite |
 | [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron to the start of the input prompt |
 
 > Add new packages by creating a folder under `packages/` and registering it in `index.ts`.
@@ -64,10 +64,10 @@ For zero-code removal, skip the extension and set `"quietStartup": true` in
 `~/.pi/agent/settings.json` (or `.pi/settings.json`). That hides the built-in
 header entirely.
 
-### Regenerating the banner
+### Regenerating the sprite
 
-The banner sprite is a **baked artifact** (`packages/header/banner.ts`) —
-`export const BANNER: string[]` holding finished-ANSI lines of chafa quadrant
+The sprite is a **baked artifact** (`packages/header/sprite.ts`) —
+`export const SPRITE: string[]` holding finished-ANSI lines of chafa quadrant
 cells. The shipped extension never decodes the source image at runtime; it just
 imports and prints those lines. When the source image changes, re-run the bake
 to regenerate the artifact.
@@ -76,7 +76,7 @@ The bake has two stages: it shells out to `decode:chart` (ADR 0012) to extract a
 clean sprite bitmap from the source chart — all the lattice/transparency/palette
 logic lives there (ADR 0009/0010) — then trims, mirrors, aspect-scales, and pipes
 it to `chafa --symbols quad`, which folds it into quadrant-cell ANSI (ADR 0006).
-The banner is always **6 rows tall** (ADR 0013, revising ADR 0008's original 5);
+The sprite is always **6 rows tall** (ADR 0013, revising ADR 0008's original 5);
 the width scales to preserve the source sprite's aspect ratio on a ~2:1 character
 grid (ADR 0008, reopening ADR 0007's height-only resample).
 
@@ -115,17 +115,17 @@ defaulting to `packages/header/assets/pokemon.png`:
 
 ```sh
 # Bake the default source (flip is ON by default — the sprite ships mirrored):
-npm run bake:header
+npm run bake:sprite
 
 # Bake an arbitrary chart instead:
-npm run bake:header -- packages/header/assets/132_1_mae_1_No.png
+npm run bake:sprite -- packages/header/assets/132_1_mae_1_No.png
 
 # Bake it unmirrored:
-npm run bake:header -- --no-flip
+npm run bake:sprite -- --no-flip
 
 # --scale is forwarded to decode:chart (controls the intermediate bitmap's
-# cell-to-pixel ratio; the banner still resamples to its fixed 6 rows):
-npm run bake:header -- packages/header/assets/132_1_mae_1_No.png --scale 3
+# cell-to-pixel ratio; the sprite still resamples to its fixed 6 rows):
+npm run bake:sprite -- packages/header/assets/132_1_mae_1_No.png --scale 3
 ```
 
 #### If the bake can't find the gridlines
@@ -150,32 +150,32 @@ colour (averaging the period is the exact inverse of ordered dither on a flat
 fill):
 
 ```sh
-npm run bake:header -- --dedither
+npm run bake:sprite -- --dedither
 ```
 
 This is **dithered sources only** — the averaging also perturbs a clean
 source's gridlines, so don't leave it on for a truecolour chart. Colour drift
 is negligible (<15/765 on this sprite's fills).
 
-The bake writes `packages/header/banner.ts` and prints the finished banner as
+The bake writes `packages/header/sprite.ts` and prints the finished sprite as
 **ANSI to stdout** — that preview is the eyeball step. Check:
 
 - **Orientation** — the sprite faces the intended way (flip on = mirrored).
 - **Float** — transparent surround shows your terminal background through it,
   with no baked-in rectangle around the sprite.
-- **Dimensions** — always 5 rows tall; width scales to preserve the source
-  aspect ratio (~11 cols for the square Pikachu).
+- **Dimensions** — always 6 rows tall (ADR 0013); width scales to preserve the
+  source aspect ratio.
 
 #### Committing
 
 Commit the regenerated artifact alongside the new source:
 
 ```sh
-git add packages/header/assets/pokemon.png packages/header/banner.ts
+git add packages/header/assets/pokemon.png packages/header/sprite.ts
 git commit
 ```
 
-There is **no drift guard** (per ADR 0003/0004) — `banner.ts` is only as fresh
+There is **no drift guard** (per ADR 0003/0004) — `sprite.ts` is only as fresh
 as the last bake, so re-baking is manual discipline. The stdout preview is how
 you confirm the bake before committing.
 
@@ -190,7 +190,7 @@ It accepts a superset of the bake's format (["The source image
 format"](#the-source-image-format)): both the **lossless** rendering described
 there and a **lossy** one (JPEG-artifacted colours, 1px mid-grey lattice, no
 top/left border, rulers outside the grid) decode with no flag and no format
-detection (ADR 0010). The banner bake still requires the lossless rendering.
+detection (ADR 0010). The sprite bake still requires the lossless rendering.
 
 ```sh
 npm run decode:chart -- path/to/chart.png              # → path/to/chart-sprite.png
@@ -203,7 +203,7 @@ ruled canvas — a 21×20-cell chart yields a 21×20 px PNG with the sprite exac
 where the chart places it and non-coded cells transparent. Upscale it losslessly
 with any nearest-neighbour resize.
 
-Two deliberate differences from the banner bake's decode:
+Two deliberate differences from the sprite bake's decode:
 
 - **Transparency is mark-based, not geometric** — a cell is opaque iff it
   carries a stamped colour code (the stamp's presence is detected, never

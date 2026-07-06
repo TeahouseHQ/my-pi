@@ -1,5 +1,5 @@
 /**
- * Header — replace Pi's built-in startup header with a baked image banner.
+ * Header — replace Pi's built-in startup header with a baked image sprite.
  *
  * The built-in header prints the Pi version plus a block of keybinding/command
  * hints (the logo, "interrupt to interrupt", "/ commands", "more", etc.).
@@ -7,10 +7,10 @@
  * renders.
  *
  * In place of the old spark ASCII art, the header renders a fixed decorative
- * image as Unicode half-block cells — see {@link BANNER} and ADR-0003. The
- * image is pre-baked into `banner.ts`; nothing decodes it at runtime.
+ * image as Unicode half-block cells — see {@link SPRITE} and ADR-0003. The
+ * image is pre-baked into `sprite.ts`; nothing decodes it at runtime.
  *
- * In addition to the banner, this header reproduces Pi's built-in startup
+ * In addition to the sprite, this header reproduces Pi's built-in startup
  * listing of loaded resources — the `[Context]`, `[Skills]`, and
  * `[Extensions]` sections — by re-discovering resources with a
  * `DefaultResourceLoader` and rendering them in the compact one-line form.
@@ -26,26 +26,27 @@ import {
 	type ExtensionAPI,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { BANNER } from "./banner";
+import { SPRITE } from "./sprite";
 import {
 	buildMetadataLines,
 	buildResourceSections,
 	composeHeader,
-	composeLogoCell,
-	renderWordmark,
+	composeBanner,
+	renderLogo,
 	type ResourceSection,
 } from "./lib";
 
 /**
  * Return one string per header line, each already within `width`. The header is
- * a single horizontal band — the logo cell (baked sprite plus the accent-tinted
- * "Pi" wordmark), a theme-dim `│` divider, and a metadata column (cwd+version
+ * a single horizontal band — the Banner (baked sprite plus the accent-tinted
+ * "Pi" logo), a theme-dim `│` divider, and a metadata column (cwd+version
  * title over the resource sections), composed by {@link composeHeader} (ADR-0005).
  */
 function renderHeader(theme: Theme, width: number, cwd: string, sections: ResourceSection[]): string[] {
-	const logoRows = composeLogoCell({ spriteRows: BANNER, wordmarkRows: renderWordmark(theme) });
+	const bannerRows = composeBanner({ spriteRows: SPRITE, logoRows: renderLogo(theme) });
 	const metaLines = buildMetadataLines(theme, { cwd, version: VERSION, sections });
-	return composeHeader(theme, { spriteRows: logoRows, metaLines, width });
+	// composeHeader lays out any left-column rows beside the divider; here that column is the Banner.
+	return composeHeader(theme, { spriteRows: bannerRows, metaLines, width });
 }
 
 /**

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run packages/",
-    "bake:header": "node scripts/bake-header-banner.mjs",
+    "bake:sprite": "node scripts/bake-sprite.mjs",
     "decode:chart": "node scripts/chart-to-sprite.mjs",
     "lint": "eslint .",
     "types": "tsc --noEmit",

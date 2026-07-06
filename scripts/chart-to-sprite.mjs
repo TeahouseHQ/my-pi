@@ -52,13 +52,13 @@
  *
  * A dithered source (palette-quantized with ordered dither) breaks gridline
  * detection; pass `--dedither` to apply the same box-blur pre-pass as the
- * banner baker. Off by default — the canonical source is truecolour solid
+ * sprite baker. Off by default — the canonical source is truecolour solid
  * fills (ADR 0004).
  *
  * Dev-only (plain `.mjs`, outside `npm run check`); `sharp` stays a
  * devDependency. Standalone by design: the lattice/mode/de-dither code is a
- * deliberate copy of `bake-header-banner.mjs`, not a shared module — the
- * banner pipeline (ADRs 0004–0008) stays frozen (ADR-0009).
+ * deliberate copy of `bake-sprite.mjs`, not a shared module — the
+ * sprite pipeline (ADRs 0004–0008) stays frozen (ADR-0009).
  */
 
 import path from "node:path";
@@ -121,7 +121,7 @@ if (!output) {
 }
 
 // ---------------------------------------------------------------------------
-// Tuning constants (shared heritage with the banner baker, ADR-0004)
+// Tuning constants (shared heritage with the sprite baker, ADR-0004)
 
 /** A cell fill reads as white (paper or the white colour code) above this. */
 const WHITE_MIN = 235;
@@ -180,7 +180,7 @@ function isLatticeGrey(r, g, b) {
 
 /**
  * Flat box blur — the exact inverse of ordered dither on a flat fill
- * (`--dedither` escape hatch; see the banner baker for the full rationale).
+ * (`--dedither` escape hatch; see the sprite baker for the full rationale).
  */
 function boxBlur(data, width, height, channels, radius) {
 	const out = Buffer.alloc(data.length);
@@ -212,7 +212,7 @@ function boxBlur(data, width, height, channels, radius) {
 
 /**
  * Detect the gridline lattice on one axis (lattice/period machinery ported
- * from the banner baker, ADR-0004; structural line-likeness added by
+ * from the sprite baker, ADR-0004; structural line-likeness added by
  * ADR-0010). A gridline is a full-length straight run of **line pixels**: a
  * line pixel is near-neutral grey AND contrasts sharply with the pixels a few
  * steps away on BOTH sides across the line — a real line is 1–3px thin, so

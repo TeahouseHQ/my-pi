@@ -208,12 +208,12 @@ export interface ResourceSection {
 export type HeaderTheme = Pick<Theme, "fg">;
 
 /**
- * The "Pi" wordmark as a 4×4 pixel-art grid, matching the brand mark in
+ * The "Pi" logo as a 4×4 pixel-art grid, matching the brand mark in
  * `assets/pi.png`: `#` is an accent pixel, any other character transparent.
- * Hand-authored here (inside `npm run check`), never baked into `banner.ts`, so
+ * Hand-authored here (inside `npm run check`), never baked into `sprite.ts`, so
  * it recolours with the theme (ADR-0005).
  */
-const WORDMARK_MODULES: string[] = [
+const LOGO_MODULES: string[] = [
 	"###.",
 	"#.#.",
 	"##.#",
@@ -225,12 +225,12 @@ const WORDMARK_MODULES: string[] = [
  * Odd, so module boundaries land mid-cell and fold to a few `▀`/`▄` seam rows
  * rather than all crisp full blocks — the tradeoff for this 75% size.
  */
-const WORDMARK_SCALE = 3;
+const LOGO_SCALE = 3;
 
-/** The scaled monochrome pixel bitmap — {@link WORDMARK_SCALE} px per module edge. */
-const WORDMARK_BITMAP: string[] = WORDMARK_MODULES.flatMap((row) => {
-	const line = Array.from(row, (ch) => (ch === "#" ? "#" : " ").repeat(WORDMARK_SCALE)).join("");
-	return Array.from({ length: WORDMARK_SCALE }, () => line);
+/** The scaled monochrome pixel bitmap — {@link LOGO_SCALE} px per module edge. */
+const LOGO_BITMAP: string[] = LOGO_MODULES.flatMap((row) => {
+	const line = Array.from(row, (ch) => (ch === "#" ? "#" : " ").repeat(LOGO_SCALE)).join("");
+	return Array.from({ length: LOGO_SCALE }, () => line);
 });
 
 /**
@@ -251,14 +251,14 @@ function foldPixelRows(top: string, bottom: string): string {
 }
 
 /**
- * Render the code-drawn "Pi" {@link WORDMARK_BITMAP} as half-block glyph rows,
+ * Render the code-drawn "Pi" {@link LOGO_BITMAP} as half-block glyph rows,
  * each tinted with the theme **accent** so it follows the theme (ADR-0005). The
- * sprite stays baked yellow; only this wordmark tracks the accent.
+ * sprite stays baked yellow; only this logo tracks the accent.
  */
-export function renderWordmark(theme: HeaderTheme): string[] {
+export function renderLogo(theme: HeaderTheme): string[] {
 	const rows: string[] = [];
-	for (let i = 0; i < WORDMARK_BITMAP.length; i += 2) {
-		const glyphs = foldPixelRows(WORDMARK_BITMAP[i], WORDMARK_BITMAP[i + 1] ?? "");
+	for (let i = 0; i < LOGO_BITMAP.length; i += 2) {
+		const glyphs = foldPixelRows(LOGO_BITMAP[i], LOGO_BITMAP[i + 1] ?? "");
 		rows.push(theme.fg("accent", glyphs));
 	}
 	return rows;
@@ -299,26 +299,26 @@ function padLineToWidth(line: string, width: number): string {
 }
 
 /**
- * Assemble the logo cell: the baked sprite with the code-drawn wordmark placed
+ * Assemble the Banner: the baked sprite with the code-drawn logo placed
  * immediately to its right, vertically centred against the taller sprite band
  * (ADR-0005). Each sprite row is padded to the sprite's *printed* width so the
- * wordmark starts at a stable column; the returned rows are one unit that
+ * logo starts at a stable column; the returned rows are one unit that
  * {@link composeHeader} then measures, so the divider stays put and the cell
- * clips as a whole when narrow — no separate reflow for the wordmark.
+ * clips as a whole when narrow — no separate reflow for the logo.
  */
-export function composeLogoCell(input: { spriteRows: string[]; wordmarkRows: string[] }): string[] {
-	const { spriteRows, wordmarkRows } = input;
+export function composeBanner(input: { spriteRows: string[]; logoRows: string[] }): string[] {
+	const { spriteRows, logoRows } = input;
 	const spriteWidth = Math.max(0, ...spriteRows.map((row) => visibleWidth(row)));
-	const topPad = Math.floor((spriteRows.length - wordmarkRows.length) / 2);
+	const topPad = Math.floor((spriteRows.length - logoRows.length) / 2);
 	return spriteRows.map((row, i) => {
 		const left = padLineToWidth(row, spriteWidth);
-		const wordmark = wordmarkRows[i - topPad] ?? "";
-		return wordmark ? `${left}  ${wordmark}` : left;
+		const logo = logoRows[i - topPad] ?? "";
+		return logo ? `${left}  ${logo}` : left;
 	});
 }
 
 /**
- * Compose the header as a single horizontal band: a fixed-width logo cell, a
+ * Compose the header as a single horizontal band: a fixed-width Banner, a
  * theme-dim `│` divider, and a metadata column (ADR-0005).
  *
  * The divider sits at a stable column derived from each sprite row's *printed*
@@ -336,7 +336,7 @@ export function composeHeader(
 	const metaAvail = width - cellWidth - 3;
 
 	// Not enough width for the divider block plus a metadata column: keep
-	// ADR-0003's per-region chop — show only the logo cell (clipped on its right
+	// ADR-0003's per-region chop — show only the Banner (clipped on its right
 	// edge with an empty ellipsis, no literal "..." in the image), and drop the
 	// divider entirely rather than dangling a bar with no metadata beside it.
 	if (metaAvail < 1) {
