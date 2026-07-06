@@ -72,12 +72,13 @@ cells. The shipped extension never decodes the source image at runtime; it just
 imports and prints those lines. When the source image changes, re-run the bake
 to regenerate the artifact.
 
-The bake has two stages: a `sharp` decode (ADR 0004) reconstructs a clean alpha
-bitmap from the source, then `chafa --symbols quad` folds it into quadrant-cell
-ANSI (ADR 0006). The banner is always **5 rows tall**; the width scales to
-preserve the source sprite's aspect ratio on a ~2:1 character grid (ADR 0008,
-reopening ADR 0007's height-only resample). For the ~square Pikachu that works
-out to ~11 columns × 5 rows.
+The bake has two stages: it shells out to `decode:chart` (ADR 0012) to extract a
+clean sprite bitmap from the source chart — all the lattice/transparency/palette
+logic lives there (ADR 0009/0010) — then trims, mirrors, aspect-scales, and pipes
+it to `chafa --symbols quad`, which folds it into quadrant-cell ANSI (ADR 0006).
+The banner is always **6 rows tall** (ADR 0013, revising ADR 0008's original 5);
+the width scales to preserve the source sprite's aspect ratio on a ~2:1 character
+grid (ADR 0008, reopening ADR 0007's height-only resample).
 
 #### Prerequisites
 
@@ -94,44 +95,37 @@ out to ~11 columns × 5 rows.
 
 #### The source image format
 
-The decode assumes a **labelled colour-chart render** — the format the current
-`packages/header/assets/pokemon.png` is in. It is *not* a general image
-converter. A source image must have, at minimum:
-
-- **Lossless PNG** (flat colour, no JPEG ringing).
-- A **uniform light-grey gridline lattice** on a regular ~15–30px period
-  spanning the art area (the decode detects these as full-length runs and takes
-  cell centres between them).
-- **Flat colour cells** — each art cell is a single solid fill (a thin stamped
-  digit inside is fine; the fill outvotes it). The decode samples the
-  most-common pixel per cell, so the source colour comes through exactly.
-- A **white paper background** surrounding the art (flood-filled to transparent
-  by the decode, so the sprite floats on any terminal background — ADR 0003).
-
-A **code→colour legend** in the upper-right and **axis-label strips** (column
-numbers along the top, row numbers down the left) are part of this chart format
-but are decorative to the bake: the legend is a spatially-isolated cluster the
-decode drops, and the axis strips sit on white and flood away with the
-background. You do not need to strip them by hand.
-
-> **A different source format reopens ADR 0004.** The decode is tuned for this
-> chart layout (a photographed sprite, an un-gridded render, or a plain icon
-> will not bake correctly). To bake such a source, the decode stage must change
-> — the chafa fold and the artifact are unaffected.
+Since ADR 0012 the bake does not decode the source itself — it shells out to
+`decode:chart` (`npm run decode:chart`), which owns the format. The source must
+be a **labelled colour-chart render** (an **instruction chart**): flat colour
+cells stamped with numeric codes, a **grey gridline lattice**, **ruler bands**
+(column/row numbers), and a **code→colour legend**. `decode:chart` handles both
+known renderings — the lossless truecolour one *and* a lossy JPEG-artifacted one
+(ADR 0010) — with no flag; a cell is opaque iff it carries a stamped code
+(mark-based transparency, ADR 0009), and every cell colour snaps to the legend
+palette. The rulers and legend are dropped structurally, so you do not need to
+strip them by hand. It is *not* a general image converter — a photographed
+sprite, an un-gridded render, or a plain icon will not decode. See ADR
+0009/0010 and the `decode:chart` help for the full contract.
 
 #### Baking
 
-Replace the source at the fixed path, then run the bake:
+The bake takes the source chart as an optional positional argument (ADR 0012),
+defaulting to `packages/header/assets/pokemon.png`:
 
 ```sh
-# 1. Drop the new labelled-chart PNG at the path the bake reads:
-#      packages/header/assets/pokemon.png
-
-# 2. Bake (flip is ON by default — the sprite ships already-mirrored):
+# Bake the default source (flip is ON by default — the sprite ships mirrored):
 npm run bake:header
 
-#    Bake it unmirrored instead:
+# Bake an arbitrary chart instead:
+npm run bake:header -- packages/header/assets/132_1_mae_1_No.png
+
+# Bake it unmirrored:
 npm run bake:header -- --no-flip
+
+# --scale is forwarded to decode:chart (controls the intermediate bitmap's
+# cell-to-pixel ratio; the banner still resamples to its fixed 6 rows):
+npm run bake:header -- packages/header/assets/132_1_mae_1_No.png --scale 3
 ```
 
 #### If the bake can't find the gridlines

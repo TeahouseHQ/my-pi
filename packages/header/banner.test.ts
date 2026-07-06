@@ -4,45 +4,48 @@ import { BANNER } from "./banner";
 /**
  * The visible (ANSI-stripped) glyph grid of the baked banner, as a human sees
  * it in the header. Since ADR 0006 the bake folds the decoded bitmap into chafa
- * **quadrant** cells. Since ADR 0008 the banner is always **5 rows tall** and
- * the width scales to preserve the source aspect ratio on a ~2:1 character grid;
- * for the ~square Pikachu (21×20) that works out to ~11 columns × 5 rows. The bake step (`npm run
- * bake:header`, flip on by default) bakes the sprite already-mirrored, so
- * {@link BANNER} prints as-is and this is the literal art that ships: re-baking
- * (or a chafa/flag change) must reproduce this mirrored Pikachu row for row, so
- * this snapshot pins the exact quadrant appearance.
+ * **quadrant** cells. Since ADR 0008 (row count revised to 6 by ADR 0013) the
+ * banner is always **6 rows tall** and the width scales to preserve the source
+ * aspect ratio on a ~2:1 character grid; for the current source (the Ditto
+ * chart `132_1_mae_1_No.png`, decoded to 16×12) that works out to 16 columns ×
+ * 6 rows. The bake step (`npm run bake:header`, flip on by default) bakes the
+ * sprite already-mirrored, so {@link BANNER} prints as-is and this is the
+ * literal art that ships: re-baking (or a chafa/flag/source change) must
+ * reproduce this row for row, so this snapshot pins the exact quadrant
+ * appearance. When you deliberately re-bake a new source, re-snapshot this.
  */
 const QUADRANT_BANNER_GRID = [
-	"▗▀▖▖  ▗▀▖  ",
-	"▝▖▖▝▘▀▀▘▀▖ ",
-	" ▝▖▖▝▘▗▀▗▗▐",
-	"  ▝▖▘▗▗▀▀▀▘",
-	"   ▝▀▀▀▀▘  ",
+	"   ▗▀▀▀▀▀▀▀▀▖   ",
+	"  ▗▀▘▝▀▀▀▖▗▝▀▝  ",
+	"▗▀▀▀▀▀▖▗▗▗▀▀▀▀▀▀",
+	"▝▀▀▝▗▀▀▀▀▀▀▖▘▀▀▀",
+	"▐▘▖▖▝▝▝▝▝▘▘▘▗▗▝▐",
+	"▝▀▀▀▀▗▀▀▀▀▖▀▀▀▀▘",
 ];
 
 const stripAnsi = (line: string) =>
 	line.replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
 
 describe("BANNER", () => {
-	it("is baked already-mirrored, so it renders as the mirrored Pikachu as-is", () => {
+	it("is baked already-mirrored, so it renders as the mirrored sprite as-is", () => {
 		// The render path prints BANNER with no runtime flip (ADR 0006), so the
 		// banner's visible cells must already be the mirrored sprite — here as
 		// chafa quadrant glyphs (ADR 0006).
 		expect(BANNER.map(stripAnsi)).toEqual(QUADRANT_BANNER_GRID);
 	});
 
-	it("scales to a fixed 5 rows with aspect-preserving width (ADR 0008)", () => {
-		// ADR 0008 fixes the banner at 5 character rows for any source and derives
-	// the width to reproduce the source W/H aspect on ~2:1-tall character cells
-	// (cellCols = 5 × 2 × bmpCols/bmpRows). The ~square Pikachu lands at 11 cols,
-	// and because 11×2 matches its 21-col source + parity pad, it takes the
-	// native-fit path (no resample) — so this snapshot is byte-stable. We assert
-	// the headline shape (5 rows; Pikachu's width near 11) rather than any glyph.
+	it("scales to a fixed 6 rows with aspect-preserving width (ADR 0008/0013)", () => {
+		// ADR 0008 fixes the banner at a constant character-row height for any
+		// source and derives the width to reproduce the source W/H aspect on
+		// ~2:1-tall character cells (cellCols = BANNER_ROWS × 2 × bmpCols/bmpRows);
+		// ADR 0013 sets that height to 6. The Ditto source (16×12) lands at 16
+		// cols. We assert the headline shape (6 rows; width near 16) rather than
+		// any glyph.
 		const widths = BANNER.map((line) => stripAnsi(line).length);
 		const maxWidth = Math.max(...widths);
-		expect(BANNER).toHaveLength(5); // fixed 5-row height (ADR 0008)
-		expect(maxWidth).toBeGreaterThanOrEqual(9);
-		expect(maxWidth).toBeLessThanOrEqual(13);
+		expect(BANNER).toHaveLength(6); // fixed 6-row height (ADR 0008/0013)
+		expect(maxWidth).toBeGreaterThanOrEqual(13);
+		expect(maxWidth).toBeLessThanOrEqual(19);
 	});
 
 	it("carries no cursor/control sequences — only styled glyph lines", () => {

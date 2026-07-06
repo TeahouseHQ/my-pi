@@ -20,7 +20,7 @@
  *      `banner.ts` ships the already-oriented art and the render path prints it
  *      as-is (a quadrant glyph has internal left/right columns, so a render-time
  *      flip would need a glyph-remap table). `--no-flip` bakes it unmirrored.
- *   3. Scale to a **fixed 5-row** banner whose width preserves the source aspect
+ *   3. Scale to a **fixed 6-row** banner whose width preserves the source aspect
  *      ratio on a ~2:1 character grid (ADR 0008): width is **nearest-neighbour**
  *      resampled to 2×cellCols internal pixels — nearest (not averaging) copies
  *      each source pixel's alpha verbatim, so the hard opaque/transparent
@@ -72,16 +72,17 @@ const DEFAULT_SOURCE = path.join(repoRoot, "packages/header/assets/pokemon.png")
 const OUTPUT = path.join(repoRoot, "packages/header/banner.ts");
 
 /**
- * Fixed banner height in character rows (ADR 0008): every source scales to 5
- * rows regardless of its native height, so the header's vertical cost is stable.
+ * Fixed banner height in character rows (ADR 0008, row count revised to 6 by
+ * ADR 0013): every source scales to this many rows regardless of its native
+ * height, so the header's vertical cost is stable.
  */
-const BANNER_ROWS = 5;
+const BANNER_ROWS = 6;
 /**
  * Terminal character-cell aspect ratio (height ÷ width). Standard monospace
  * fonts are ~2:1 (a cell is about twice as tall as wide); the existing 11×5
  * Pikachu implies ~2.1, so 2 is the honest round number and keeps Pikachu at 11
  * cols. Used to derive the column count that reproduces the source aspect at a
- * fixed 5-row height: cellCols = BANNER_ROWS × CHAR_CELL_ASPECT × W/H.
+ * fixed 6-row height: cellCols = BANNER_ROWS × CHAR_CELL_ASPECT × W/H.
  */
 const CHAR_CELL_ASPECT = 2;
 
@@ -278,12 +279,13 @@ async function bake() {
 		// and `banner.ts` is then printed as-is.
 		const oriented = flip ? bitmap.map((row) => row.slice().reverse()) : bitmap;
 
-		// Scale to a fixed 5-row banner whose width preserves the source aspect
-		// ratio on a ~2:1 character grid (ADR 0008, reopening ADR 0007's width
-		// clause). A quadrant cell packs a 2×2 block, so 5 character rows need 10
-		// internal pixels tall; the column count that reproduces the source W/H aspect
-		// on 2:1-tall character cells is cellCols = BANNER_ROWS × CHAR_CELL_ASPECT ×
-		// bmpCols/bmpRows. Two width paths, both float-safe:
+		// Scale to a fixed 6-row banner whose width preserves the source aspect
+		// ratio on a ~2:1 character grid (ADR 0008, row count revised to 6 by
+		// ADR 0013, reopening ADR 0007's width clause). A quadrant cell packs a 2×2
+		// block, so 6 character rows need 12 internal pixels tall; the column count
+		// that reproduces the source W/H aspect on 2:1-tall character cells is
+		// cellCols = BANNER_ROWS × CHAR_CELL_ASPECT × bmpCols/bmpRows. Two width
+		// paths, both float-safe:
 		//   • Native fit (targetW is bmpCols, or bmpCols+1 for an odd source): the
 		//     source already matches the aspect target, so no resample — copy direct
 		//     and pad the odd tail transparent. Padding (not duplicating) keeps the
@@ -294,7 +296,7 @@ async function bake() {
 		//     the per-quadrant float (ADR 0003) survives; an averaging resample would
 		//     blend opaque with transparent, fabricate partial-coverage cells, and bake
 		//     the solid-fill halo ADR 0006 rejects.
-		// Height always keeps chafa's averaging resample (bmpRows → 10 internal) — the
+		// Height always keeps chafa's averaging resample (bmpRows → 12 internal) — the
 		// vertical downscale ADR 0007 accepted. (--stretch makes our aspect win.)
 		const cellRows = BANNER_ROWS;
 		const cellCols = Math.max(
@@ -342,7 +344,7 @@ async function bake() {
  * ${bannerRows.length} finished-ANSI lines of Unicode quadrant cells, folded by
  * chafa (\`--symbols quad\`) from the ${bmpCols}×${bmpRows} sprite bitmap that
  * \`decode:chart\` extracts from the source chart \`${sourceRel}\` (ADR 0012). The
- * art is scaled to a fixed 5-row banner whose width preserves the source aspect
+ * art is scaled to a fixed ${BANNER_ROWS}-row banner whose width preserves the source aspect
  * ratio on a ~2:1 character grid: width is nearest-neighbour resampled (hard
  * alpha preserved, so the float survives), height is averaging-resampled
  * (ADR 0008, reopening ADR 0007). Each cell carries one truecolor
