@@ -57,6 +57,11 @@
  * it unmirrored; `--flip` is accepted for explicitness. Pass flags through npm
  * as `npm run bake:header -- --no-flip`.
  *
+ * A dithered source (palette-quantized with ordered dither) breaks gridline
+ * detection; pass `--dedither` to apply a small box-blur pre-pass that
+ * collapses the dither period back to solid colours. Off by default — the
+ * canonical source is truecolour solid fills (ADR 0004).
+ *
  * The generated file emits `\u001b` escape sequences (via JSON.stringify),
  * never raw ESC bytes, so it stays lint- and type-clean inside `check`.
  */
@@ -81,6 +86,25 @@ const OUTPUT = path.join(repoRoot, "packages/header/banner.ts");
  * it unmirrored; `--flip` is accepted for explicitness.
  */
 const flip = !process.argv.slice(2).includes("--no-flip");
+
+/**
+ * De-dither pre-pass (escape hatch for palette-quantized sources). Some exports
+ * apply ordered dithering (a repeating ~5px threshold matrix) to flat colours —
+ * the gridline grey ends up smeared across brightness bands (63/127/191/207/255)
+ * instead of one solid value, so the full-span gridline detector misses the
+ * axis the art overpaints. Averaging one full dither period is the exact inverse
+ * of ordered dither on a flat fill, so a flat 5×5 box blur collapses the dither
+ * back to the source colour and recovers solid gridlines with negligible colour
+ * drift (<15/765 on this sprite's fills).
+ *
+ * **Dithered sources only.** Any averaging also bleeds the art's crisp edges into
+ * grey, creating false gridline candidates that perturb a clean source's lattice
+ * (a solid Pikachu chart bakes to a wrong 32×27 grid where it should be 21×20).
+ * The canonical source is truecolour solid fills (ADR 0004); pass `--dedither`
+ * only when the source is actually dithered.
+ */
+const dedither = process.argv.slice(2).includes("--dedither");
+const DEDITHER_BOX_RADIUS = 2; // 5×5 window, matches the observed 5px dither period
 
 // A cell reads as background (transparent) when its fill is white AND it is
 // connected to the image border through other white cells. Interior white cells
@@ -112,6 +136,41 @@ function isGridline(r, g, b) {
 	const mx = Math.max(r, g, b);
 	const mn = Math.min(r, g, b);
 	return mx - mn < 15 && mn >= 205 && mx <= 250;
+}
+
+/**
+ * Flat box blur (one averaging window per output pixel) — the exact inverse of
+ * ordered dither on a flat fill: averaging one full dither period returns the
+ * original solid colour. `radius=2` is a 5×5 window matching the observed 5px
+ * dither period. Edges clamp to the border. Dithered sources only — see the
+ * `dedither` flag above; this is not a general-purpose blur.
+ */
+function boxBlur(data, width, height, channels, radius) {
+	const out = Buffer.alloc(data.length);
+	for (let y = 0; y < height; y += 1) {
+		for (let x = 0; x < width; x += 1) {
+			let R = 0;
+			let G = 0;
+			let B = 0;
+			let n = 0;
+			for (let dy = -radius; dy <= radius; dy += 1) {
+				const yy = Math.max(0, Math.min(height - 1, y + dy));
+				for (let dx = -radius; dx <= radius; dx += 1) {
+					const xx = Math.max(0, Math.min(width - 1, x + dx));
+					const o = (yy * width + xx) * channels;
+					R += data[o];
+					G += data[o + 1];
+					B += data[o + 2];
+					n += 1;
+				}
+			}
+			const o = (y * width + x) * channels;
+			out[o] = Math.round(R / n);
+			out[o + 1] = Math.round(G / n);
+			out[o + 2] = Math.round(B / n);
+		}
+	}
+	return out;
 }
 
 /**
@@ -355,7 +414,15 @@ function stripControlSequences(raw) {
 async function bake() {
 	preflightChafa();
 
-	const { data, info } = await sharp(SOURCE).raw().toBuffer({ resolveWithObject: true });
+	// Optional de-dither pre-pass (escape hatch, dithered sources only): a flat
+	// 5×5 box average collapses one ordered-dither period back to the source
+	// colour, recovering solid gridlines the detector can read. Averaging also
+	// perturbs a clean source's lattice, so this is opt-in, not a default.
+	const loaded = await sharp(SOURCE).raw().toBuffer({ resolveWithObject: true });
+	const data = dedither
+		? boxBlur(loaded.data, loaded.info.width, loaded.info.height, loaded.info.channels, DEDITHER_BOX_RADIUS)
+		: loaded.data;
+	const info = loaded.info;
 	const { width: W, height: H, channels: C } = info;
 	const at = (x, y) => {
 		const o = (y * W + x) * C;

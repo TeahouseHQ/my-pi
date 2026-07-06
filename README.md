@@ -132,6 +132,35 @@ npm run bake:header
 npm run bake:header -- --no-flip
 ```
 
+#### If the bake can't find the gridlines
+
+The decode rejects the source with a clear error if too few gridlines survive
+the full-span check. The most common cause is **dithering**: some image tools
+export the chart palette-quantized with *ordered dithering* (a repeating ~5px
+threshold matrix), which smears the solid grey gridline across brightness bands
+so the detector can't read it on whichever axis the art overpaints. You can
+spot it by zooming in — a dithered gridline shows a stipple pattern (e.g.
+`127,255,63,255,191` repeating) instead of one flat grey.
+
+The root-cause fix is to **re-export without dithering** (truecolor RGB, no
+palette/quantize step) — that keeps the source colour-exact as ADR 0004
+intends. macOS Preview cannot do this (it re-encodes the existing pixels
+losslessly and offers no dither controls); regenerate the chart in whatever
+made it with dithering off.
+
+As an escape hatch, the bake accepts `--dedither` — it applies a flat 5×5 box
+average as a pre-pass, which collapses one dither period back to the source
+colour (averaging the period is the exact inverse of ordered dither on a flat
+fill):
+
+```sh
+npm run bake:header -- --dedither
+```
+
+This is **dithered sources only** — the averaging also perturbs a clean
+source's gridlines, so don't leave it on for a truecolour chart. Colour drift
+is negligible (<15/765 on this sprite's fills).
+
 The bake writes `packages/header/banner.ts` and prints the finished banner as
 **ANSI to stdout** — that preview is the eyeball step. Check:
 
