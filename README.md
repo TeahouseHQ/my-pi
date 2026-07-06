@@ -66,26 +66,92 @@ header entirely.
 
 ### Regenerating the banner
 
-The banner sprite is a baked artifact (`packages/header/banner.ts`) — the
-shipped extension never decodes the source image at runtime. When the source
-chart (`packages/header/assets/pokemon.png`) changes, rebuild it:
+The banner sprite is a **baked artifact** (`packages/header/banner.ts`) —
+`export const BANNER: string[]` holding finished-ANSI lines of chafa quadrant
+cells. The shipped extension never decodes the source image at runtime; it just
+imports and prints those lines. When the source image changes, re-run the bake
+to regenerate the artifact.
+
+The bake has two stages: a `sharp` decode (ADR 0004) reconstructs a clean alpha
+bitmap from the source, then `chafa --symbols quad` folds it into quadrant-cell
+ANSI (ADR 0006, height halved via resample per ADR 0007). The result is ~11
+columns × 5 rows.
+
+#### Prerequisites
+
+- **Node deps** — `npm install` once (pulls in `sharp`, the decode decoder, as
+  a devDependency). It never reaches the shipped extension.
+- **`chafa`** — a system binary, **not** pinned by `package.json` and never a
+  runtime dependency. Install it out of band:
+
+  ```sh
+  brew install chafa      # macOS; see https://hpjansson.org/chafa/ for others
+  ```
+
+  The bake errors clearly if `chafa` is missing.
+
+#### The source image format
+
+The decode assumes a **labelled colour-chart render** — the format the current
+`packages/header/assets/pokemon.png` is in. It is *not* a general image
+converter. A source image must have, at minimum:
+
+- **Lossless PNG** (flat colour, no JPEG ringing).
+- A **uniform light-grey gridline lattice** on a regular ~15–30px period
+  spanning the art area (the decode detects these as full-length runs and takes
+  cell centres between them).
+- **Flat colour cells** — each art cell is a single solid fill (a thin stamped
+  digit inside is fine; the fill outvotes it). The decode samples the
+  most-common pixel per cell, so the source colour comes through exactly.
+- A **white paper background** surrounding the art (flood-filled to transparent
+  by the decode, so the sprite floats on any terminal background — ADR 0003).
+
+A **code→colour legend** in the upper-right and **axis-label strips** (column
+numbers along the top, row numbers down the left) are part of this chart format
+but are decorative to the bake: the legend is a spatially-isolated cluster the
+decode drops, and the axis strips sit on white and flood away with the
+background. You do not need to strip them by hand.
+
+> **A different source format reopens ADR 0004.** The decode is tuned for this
+> chart layout (a photographed sprite, an un-gridded render, or a plain icon
+> will not bake correctly). To bake such a source, the decode stage must change
+> — the chafa fold and the artifact are unaffected.
+
+#### Baking
+
+Replace the source at the fixed path, then run the bake:
 
 ```sh
+# 1. Drop the new labelled-chart PNG at the path the bake reads:
+#      packages/header/assets/pokemon.png
+
+# 2. Bake (flip is ON by default — the sprite ships already-mirrored):
 npm run bake:header
+
+#    Bake it unmirrored instead:
+npm run bake:header -- --no-flip
 ```
 
-The bake decodes the labelled colour-chart source into a clean alpha bitmap
-(ADR 0004) and folds it into Unicode **quadrant cells** via [`chafa`](https://hpjansson.org/chafa/)
-(ADR 0006). `chafa` is a system binary — it is **not** pinned by `package.json`
-and is never a runtime dependency — so install it out of band first:
+The bake writes `packages/header/banner.ts` and prints the finished banner as
+**ANSI to stdout** — that preview is the eyeball step. Check:
+
+- **Orientation** — the sprite faces the intended way (flip on = mirrored).
+- **Float** — transparent surround shows your terminal background through it,
+  with no baked-in rectangle around the sprite.
+- **Dimensions** — ~11 columns wide × 5 rows tall.
+
+#### Committing
+
+Commit the regenerated artifact alongside the new source:
 
 ```sh
-brew install chafa      # macOS; see https://hpjansson.org/chafa/ for others
+git add packages/header/assets/pokemon.png packages/header/banner.ts
+git commit
 ```
 
-The bake prints an ANSI preview of the finished banner so you can eyeball the
-render (including that transparency still floats) before committing. Pass
-`--no-flip` to bake the sprite unmirrored: `npm run bake:header -- --no-flip`.
+There is **no drift guard** (per ADR 0003/0004) — `banner.ts` is only as fresh
+as the last bake, so re-baking is manual discipline. The stdout preview is how
+you confirm the bake before committing.
 
 ## Prompt prefix
 
