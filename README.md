@@ -106,7 +106,7 @@ Pi will auto-load the extension on next start.
 
 ```sh
 npm install
-npm test
+npm run check
 ```
 
 ## Project structure
