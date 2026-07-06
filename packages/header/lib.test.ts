@@ -19,11 +19,14 @@ import {
 	type HeaderTheme,
 } from "./lib";
 
-/** Identity theme: `fg` returns text unchanged so tests assert on layout, not colour. */
-const plainTheme: HeaderTheme = { fg: (_color, text) => text };
+/** Identity theme: `fg`/`bold` return text unchanged so tests assert on layout, not colour. */
+const plainTheme: HeaderTheme = { fg: (_color, text) => text, bold: (text) => text };
 
-/** Tagging theme: wraps text in `<color>…</color>` so tests can assert on the colour used. */
-const taggingTheme: HeaderTheme = { fg: (color, text) => `<${color}>${text}</${color}>` };
+/** Tagging theme: wraps text in `<color>…</color>`/`<b>…</b>` so tests can assert on styling. */
+const taggingTheme: HeaderTheme = {
+	fg: (color, text) => `<${color}>${text}</${color}>`,
+	bold: (text) => `<b>${text}</b>`,
+};
 
 const localSource = (overrides: Partial<SourceInfo> = {}): SourceInfo => ({
 	path: "",
@@ -180,8 +183,8 @@ describe("buildResourceSections", () => {
 
 		expect(sections).toEqual([
 			{ name: "Context", labels: ["AGENTS.md", "docs/AGENTS.md"] },
-			{ name: "Skills", labels: ["review", "tdd"] },
-			{ name: "Extensions", labels: ["header"] },
+			{ name: "Skills", labels: ["review", "tdd"], showCount: true },
+			{ name: "Extensions", labels: ["header"], showCount: true },
 		]);
 	});
 
@@ -192,7 +195,7 @@ describe("buildResourceSections", () => {
 			skills: [{ name: "tdd" }],
 			extensions: [],
 		});
-		expect(sections).toEqual([{ name: "Skills", labels: ["tdd"] }]);
+		expect(sections).toEqual([{ name: "Skills", labels: ["tdd"], showCount: true }]);
 	});
 
 	it("sorts skills and extensions but keeps context-file order", () => {
@@ -203,20 +206,20 @@ describe("buildResourceSections", () => {
 			extensions: [],
 		});
 		expect(sections[0]).toEqual({ name: "Context", labels: ["z.md", "a.md"] });
-		expect(sections[1]).toEqual({ name: "Skills", labels: ["apple", "zebra"] });
+		expect(sections[1]).toEqual({ name: "Skills", labels: ["apple", "zebra"], showCount: true });
 	});
 });
 
 // ── renderLogo ───────────────────────────────────────────────────────────
 
 describe("renderLogo", () => {
-	it("colours the code-drawn 'Pi' with the theme accent, not a baked colour", () => {
+	it("colours the code-drawn 'Pi' dim, not a baked colour", () => {
 		const rows = renderLogo(taggingTheme);
 		expect(rows.length).toBeGreaterThan(0);
 		for (const row of rows) {
-			expect(row).toContain("<accent>");
-			// No other theme colour leaks in — the whole logo follows the accent.
-			expect(row).not.toMatch(/<(?!accent|\/accent)/);
+			expect(row).toContain("<dim>");
+			// No other theme colour leaks in — the whole logo follows the dim token.
+			expect(row).not.toMatch(/<(?!dim|\/dim)/);
 		}
 	});
 
@@ -238,13 +241,13 @@ describe("renderLogo", () => {
 // ── composeHeader ────────────────────────────────────────────────────────────
 
 describe("composeHeader", () => {
-	it("composes each line as `Banner │ metadata`", () => {
+	it("composes each line as `Banner   │   metadata` (3-space divider padding)", () => {
 		const lines = composeHeader(plainTheme, {
 			spriteRows: ["ab", "cd"],
 			metaLines: ["hi"],
 			width: 40,
 		});
-		expect(lines).toEqual(["ab │ hi", "cd │"]);
+		expect(lines).toEqual(["ab   │   hi", "cd   │"]);
 	});
 
 	it("aligns the divider to a stable column from each row's printed width", () => {
@@ -290,10 +293,10 @@ describe("composeHeader", () => {
 		const lines = composeHeader(plainTheme, {
 			spriteRows: ["abc", "abc"],
 			metaLines: ["ok", "abcdefghijklmno"],
-			width: 11, // cell(3) + " │ "(3) leaves 5 columns for metadata
+			width: 15, // cell(3) + "   │   "(7) leaves 5 columns for metadata
 		});
 		for (const line of lines) {
-			expect(visibleWidth(line)).toBeLessThanOrEqual(11);
+			expect(visibleWidth(line)).toBeLessThanOrEqual(15);
 		}
 		// The short line survives intact; the long one is cut, not dropped wholesale.
 		expect(lines[0]).toContain("ok");
@@ -383,11 +386,11 @@ describe("buildMetadataLines", () => {
 			cwd: "/proj",
 			version: "9.9.9",
 			sections: [
-				{ name: "Skills", labels: ["review", "tdd"] },
-				{ name: "Extensions", labels: ["header"] },
+				{ name: "Skills", labels: ["review", "tdd"], showCount: true },
+				{ name: "Extensions", labels: ["header"], showCount: true },
 			],
 		});
-		expect(lines).toEqual(["/proj  v9.9.9", "Skills  review, tdd", "Extensions  header"]);
+		expect(lines).toEqual(["/proj  v9.9.9", "Skills[2]  review, tdd", "Extensions[1]  header"]);
 	});
 
 	it("home-shortens the cwd in the title line", () => {

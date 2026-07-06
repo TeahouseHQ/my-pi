@@ -202,10 +202,12 @@ export function compactList(items: string[], options?: { sort?: boolean }): stri
 export interface ResourceSection {
 	name: string;
 	labels: string[];
+	/** When set, a bracketed item count is shown after the name — e.g. `Skills[10]`. */
+	showCount?: boolean;
 }
 
-/** The slice of {@link Theme} the header composition needs — just colour tagging. */
-export type HeaderTheme = Pick<Theme, "fg">;
+/** The slice of {@link Theme} the header composition needs — colour tagging plus bold. */
+export type HeaderTheme = Pick<Theme, "fg" | "bold">;
 
 /**
  * The "Pi" logo as a 4×4 pixel-art grid, matching the brand mark in
@@ -252,14 +254,15 @@ function foldPixelRows(top: string, bottom: string): string {
 
 /**
  * Render the code-drawn "Pi" {@link LOGO_BITMAP} as half-block glyph rows,
- * each tinted with the theme **accent** so it follows the theme (ADR-0005). The
- * sprite stays baked yellow; only this logo tracks the accent.
+ * each tinted `dim` so it recedes against the baked sprite and the accent-coloured
+ * cwd (ADR-0005). The sprite stays baked yellow; only this logo tracks the theme,
+ * now via the dim token.
  */
 export function renderLogo(theme: HeaderTheme): string[] {
 	const rows: string[] = [];
 	for (let i = 0; i < LOGO_BITMAP.length; i += 2) {
 		const glyphs = foldPixelRows(LOGO_BITMAP[i], LOGO_BITMAP[i + 1] ?? "");
-		rows.push(theme.fg("accent", glyphs));
+		rows.push(theme.fg("dim", glyphs));
 	}
 	return rows;
 }
@@ -269,12 +272,17 @@ export function renderLogo(theme: HeaderTheme): string[] {
  * version, no `pi`/`claude ·` branding (ADR-0005) — e.g. `~/code/my-pi  v1.2.3`.
  */
 export function formatTitleLine(theme: HeaderTheme, cwd: string, version: string): string {
-	return `${theme.fg("mdHeading", formatDisplayPath(cwd))}  ${theme.fg("dim", `v${version}`)}`;
+	return `${theme.bold(theme.fg("accent", formatDisplayPath(cwd)))}  ${theme.fg("dim", `v${version}`)}`;
 }
 
-/** One resource section as a single labelled line — e.g. `Skills  review, tdd`. */
+/**
+ * One resource section as a single labelled line — e.g. `Skills[2]  review, tdd`.
+ * Sections with {@link ResourceSection.showCount} get a bracketed item count
+ * appended to the name; the count is part of the (accent) heading.
+ */
 export function renderSectionLine(theme: HeaderTheme, section: ResourceSection): string {
-	return `${theme.fg("mdHeading", section.name)}  ${theme.fg("dim", section.labels.join(", "))}`;
+	const heading = section.showCount ? `${section.name}[${section.labels.length}]` : section.name;
+	return `${theme.fg("mdHeading", heading)}  ${theme.fg("dim", section.labels.join(", "))}`;
 }
 
 /**
@@ -317,6 +325,12 @@ export function composeBanner(input: { spriteRows: string[]; logoRows: string[] 
 	});
 }
 
+/** Horizontal padding on each side of the `│` divider — 3 spaces (ADR-0005). */
+const DIVIDER_PAD = "   ";
+
+/** Printed width of the whole `"   │   "` divider block: pad + bar + pad. */
+const DIVIDER_BLOCK_WIDTH = DIVIDER_PAD.length * 2 + 1;
+
 /**
  * Compose the header as a single horizontal band: a fixed-width Banner, a
  * theme-dim `│` divider, and a metadata column (ADR-0005).
@@ -332,8 +346,9 @@ export function composeHeader(
 ): string[] {
 	const { spriteRows, metaLines, width } = input;
 	const cellWidth = Math.max(0, ...spriteRows.map((row) => visibleWidth(row)));
-	// Columns left for the metadata after the cell and the " │ " divider block.
-	const metaAvail = width - cellWidth - 3;
+	// Columns left for the metadata after the cell and the "   │   " divider block
+	// (the bar padded by 3 spaces on each side).
+	const metaAvail = width - cellWidth - DIVIDER_BLOCK_WIDTH;
 
 	// Not enough width for the divider block plus a metadata column: keep
 	// ADR-0003's per-region chop — show only the Banner (clipped on its right
@@ -352,8 +367,8 @@ export function composeHeader(
 		// Each metadata line truncates independently with a normal ellipsis as the
 		// terminal narrows — the sections shrink rather than being chopped blindly.
 		const meta = rawMeta ? truncateToWidth(rawMeta, metaAvail) : "";
-		const base = `${left} ${divider}`;
-		return meta ? `${base} ${meta}` : base;
+		const base = `${left}${DIVIDER_PAD}${divider}`;
+		return meta ? `${base}${DIVIDER_PAD}${meta}` : base;
 	});
 }
 
@@ -382,14 +397,14 @@ export function buildResourceSections(input: {
 	if (input.skills.length > 0) {
 		const labels = compactList(input.skills.map((skill) => skill.name));
 		if (labels.length > 0) {
-			sections.push({ name: "Skills", labels });
+			sections.push({ name: "Skills", labels, showCount: true });
 		}
 	}
 
 	if (input.extensions.length > 0) {
 		const labels = compactList(getCompactExtensionLabels(input.extensions));
 		if (labels.length > 0) {
-			sections.push({ name: "Extensions", labels });
+			sections.push({ name: "Extensions", labels, showCount: true });
 		}
 	}
 
