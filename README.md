@@ -74,8 +74,10 @@ to regenerate the artifact.
 
 The bake has two stages: a `sharp` decode (ADR 0004) reconstructs a clean alpha
 bitmap from the source, then `chafa --symbols quad` folds it into quadrant-cell
-ANSI (ADR 0006, height halved via resample per ADR 0007). The result is ~11
-columns × 5 rows.
+ANSI (ADR 0006). The banner is always **5 rows tall**; the width scales to
+preserve the source sprite's aspect ratio on a ~2:1 character grid (ADR 0008,
+reopening ADR 0007's height-only resample). For the ~square Pikachu that works
+out to ~11 columns × 5 rows.
 
 #### Prerequisites
 
@@ -167,7 +169,8 @@ The bake writes `packages/header/banner.ts` and prints the finished banner as
 - **Orientation** — the sprite faces the intended way (flip on = mirrored).
 - **Float** — transparent surround shows your terminal background through it,
   with no baked-in rectangle around the sprite.
-- **Dimensions** — ~11 columns wide × 5 rows tall.
+- **Dimensions** — always 5 rows tall; width scales to preserve the source
+  aspect ratio (~11 cols for the square Pikachu).
 
 #### Committing
 

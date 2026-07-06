@@ -4,9 +4,9 @@ import { BANNER } from "./banner";
 /**
  * The visible (ANSI-stripped) glyph grid of the baked banner, as a human sees
  * it in the header. Since ADR 0006 the bake folds the decoded bitmap into chafa
- * **quadrant** cells, and since ADR 0007 the height is resampled too, so the
- * 21×20 art renders as ~11 columns × 5 rows — half the width **and** half the
- * height of the old half-block fold (21×10). The bake step (`npm run
+ * **quadrant** cells. Since ADR 0008 the banner is always **5 rows tall** and
+ * the width scales to preserve the source aspect ratio on a ~2:1 character grid;
+ * for the ~square Pikachu (21×20) that works out to ~11 columns × 5 rows. The bake step (`npm run
  * bake:header`, flip on by default) bakes the sprite already-mirrored, so
  * {@link BANNER} prints as-is and this is the literal art that ships: re-baking
  * (or a chafa/flag change) must reproduce this mirrored Pikachu row for row, so
@@ -31,15 +31,16 @@ describe("BANNER", () => {
 		expect(BANNER.map(stripAnsi)).toEqual(QUADRANT_BANNER_GRID);
 	});
 
-	it("folds the art into chafa quadrant cells, halving width and height (ADR 0007)", () => {
-		// A quadrant cell packs a 2×2 internal block. Width is padded to even and
-		// folded 2:1 (no resample); height is resampled 2:1 (ADR 0007), so the 21×20
-		// art grid renders as ~11 columns × 5 rows — a quarter of the old half-block
-		// fold's cell count. chafa owns the per-cell glyph/colour pick, so we assert
-		// the headline behaviour (both dimensions halved) rather than any one glyph.
+	it("scales to a fixed 5 rows with aspect-preserving width (ADR 0008)", () => {
+		// ADR 0008 fixes the banner at 5 character rows for any source and derives
+	// the width to reproduce the source W/H aspect on ~2:1-tall character cells
+	// (cellCols = 5 × 2 × bmpCols/bmpRows). The ~square Pikachu lands at 11 cols,
+	// and because 11×2 matches its 21-col source + parity pad, it takes the
+	// native-fit path (no resample) — so this snapshot is byte-stable. We assert
+	// the headline shape (5 rows; Pikachu's width near 11) rather than any glyph.
 		const widths = BANNER.map((line) => stripAnsi(line).length);
 		const maxWidth = Math.max(...widths);
-		expect(BANNER).toHaveLength(5); // height halved too (ADR 0007)
+		expect(BANNER).toHaveLength(5); // fixed 5-row height (ADR 0008)
 		expect(maxWidth).toBeGreaterThanOrEqual(9);
 		expect(maxWidth).toBeLessThanOrEqual(13);
 	});

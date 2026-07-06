@@ -1,5 +1,12 @@
 # Header banner: halve the height too (vertical resample)
 
+> **One position reopened by [ADR 0008](0008-header-banner-fixed-five-rows-aspect-width.md)**
+> — the "only the height is resampled, not the width" clause. ADR 0008 fixes the
+> banner at exactly 5 rows for every source and derives the width to preserve
+> the source aspect ratio (nearest-neighbour, which preserves the hard alpha this
+> ADR's float argument depends on). The vertical resample, the chafa quadrant
+> fold, the float invariant, and the bake-time mirror all stand.
+
 ADR 0006 shrank the banner's **width** by switching its glyph from half-blocks
 (1×2 px/cell) to **quadrant** cells (2×2 px/cell): the 21×20 art repacks into
 ~11 columns × **10 rows**, halving the cell count while *keeping every source

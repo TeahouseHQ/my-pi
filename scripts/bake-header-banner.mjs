@@ -26,14 +26,17 @@
  *      by art (cheeks/eye highlights) stay opaque. Finally trim fully
  *      transparent border rows/columns to the art's bounding box.
  *
- * Fold into cells (ADR-0006, height reopened by ADR-0007): the clean alpha
- * bitmap is written to a temporary PNG and piped to `chafa --symbols quad -f
- * symbols -c full --size <cols>x<rows> --stretch`. The width is padded to an
- * even column count and folded 2:1, so each cell covers a true 2-source-column
- * block — chafa does **not** resample horizontally, so flat fills stay exact and
- * no solid-fill halo appears on vertical silhouette edges. The **height is
- * resampled** (each cell covers 4 source rows): ADR-0006 rejected that downscale
- * to keep every source pixel, ADR-0007 reopens it to halve the row count too.
+ * Fold into cells (ADR-0006, height reopened by ADR-0007, aspect-fixed by
+ * ADR-0008): the clean alpha bitmap is scaled to a **fixed 5-row** banner whose
+ * width preserves the source aspect ratio, written to a temporary PNG, and
+ * piped to `chafa --symbols quad -f symbols -c full --size <cols>x<rows>
+ * --stretch`. Width is **nearest-neighbour** resampled to 2×cellCols internal
+ * pixels — nearest (not averaging) copies each source pixel's alpha verbatim, so
+ * the hard opaque/transparent classification reaches chafa and the per-quadrant
+ * float (ADR-0003) survives; an averaging resample would blend opaque with
+ * transparent, fabricate partial-coverage cells, and bake the solid-fill halo
+ * ADR-0006 rejects. chafa then folds width 2:1 at native resolution and resamples
+ * the height (bmpRows → 10 internal) via the vertical average ADR-0007 accepted.
  * chafa picks the two colours + the quadrant glyph per cell; its stdout is
  * captured, the cursor/control sequences it wraps around the art are stripped
  * (keeping only the SGR + glyph lines), and the result is re-emitted as
@@ -105,6 +108,20 @@ const flip = !process.argv.slice(2).includes("--no-flip");
  */
 const dedither = process.argv.slice(2).includes("--dedither");
 const DEDITHER_BOX_RADIUS = 2; // 5×5 window, matches the observed 5px dither period
+
+/**
+ * Fixed banner height in character rows (ADR-0008): every source scales to 5
+ * rows regardless of its native height, so the header's vertical cost is stable.
+ */
+const BANNER_ROWS = 5;
+/**
+ * Terminal character-cell aspect ratio (height ÷ width). Standard monospace
+ * fonts are ~2:1 (a cell is about twice as tall as wide); the existing 11×5
+ * Pikachu implies ~2.1, so 2 is the honest round number and keeps Pikachu at 11
+ * cols. Used to derive the column count that reproduces the source aspect at a
+ * fixed 5-row height: cellCols = BANNER_ROWS × CHAR_CELL_ASPECT × W/H.
+ */
+const CHAR_CELL_ASPECT = 2;
 
 // A cell reads as background (transparent) when its fill is white AND it is
 // connected to the image border through other white cells. Interior white cells
@@ -360,13 +377,15 @@ function boundingBox(opaque, cols, rows) {
 }
 
 /**
- * Run chafa on the temp PNG (the clean alpha bitmap at native resolution) and
- * return its raw stdout. The bitmap is fed to chafa at **native resolution** — one
- * source pixel per chafa input pixel — with `--size <cols>x<rows> --stretch`
- * chosen so each output quadrant cell covers a true 2×2 source block: chafa must
- * not resample, or it fabricates partial-coverage cells and reintroduces the
- * solid-fill halos ADR-0006 rejects. `-t`/`--threshold` is deliberately left at
- * its default (the ADR spike: `-t 0` erases the sprite, `-t 1` over-solidifies).
+ * Run chafa on the temp PNG (the aspect-scaled alpha bitmap) and return its raw
+ * stdout. The bitmap arrives pre-scaled: its width is already 2×cols internal
+ * pixels (nearest-neighbour, ADR-0008), so chafa folds width 2:1 at native
+ * resolution — one input pixel per internal pixel horizontally, no horizontal
+ * resample, so no partial-coverage cells or solid-fill halos (ADR-0006). chafa
+ * does resample the height (source rows → 2×rows internal) via the vertical
+ * average ADR-0007 accepted; `--stretch` defeats chafa's own aspect correction so
+ * our pre-computed aspect wins. `-t`/`--threshold` is deliberately left at its
+ * default (the ADR spike: `-t 0` erases the sprite, `-t 1` over-solidifies).
  */
 function chafaQuadrants(cols, rows, tmpPng) {
 	const raw = spawnSync(
@@ -470,22 +489,43 @@ async function bake() {
 	// and `banner.ts` is then printed as-is.
 	const oriented = flip ? bitmap.map((row) => row.slice().reverse()) : bitmap;
 
-	// Fold into quadrant cells via chafa at ~11×5 (ADR-0007). Width halves
-	// exactly: pad the bitmap to an even column count so each cell covers a true
-	// 2-source-column block — no horizontal resample, so flat fills stay exact and
-	// no horizontal solid-fill halo appears. Height is resampled: each cell covers
-	// 4 source rows, so chafa averages two source rows per internal pixel. That
-	// vertical downscale is the trade ADR-0006 rejected and ADR-0007 reopens, to
-	// halve the banner's row count as well as its width.
-	const pngCols = bmpCols + (bmpCols % 2);
-	const cellCols = Math.ceil(pngCols / 2);
-	const cellRows = Math.ceil(bmpRows / 4);
+	// Scale to a fixed 5-row banner whose width preserves the source aspect
+	// ratio on a ~2:1 character grid (ADR-0008, reopening ADR-0007's width
+	// clause). A quadrant cell packs a 2×2 block, so 5 character rows need 10
+	// internal pixels tall; the column count that reproduces the source W/H aspect
+	// on 2:1-tall character cells is cellCols = BANNER_ROWS × CHAR_CELL_ASPECT ×
+	// bmpCols/bmpRows. Two width paths, both float-safe:
+	//   • Native fit (targetW is bmpCols, or bmpCols+1 for an odd source): the
+	//     source already matches the aspect target, so no resample — copy direct
+	//     and pad the odd tail transparent. Padding (not duplicating) keeps the
+	//     silhouette edge floating, exactly the ADR-0006 path.
+	//   • Aspect correction (any other targetW): nearest-neighbour resample to
+	//     targetW. Nearest — not averaging — copies each source pixel's alpha
+	//     verbatim, so the hard opaque/transparent classification reaches chafa and
+	//     the per-quadrant float (ADR-0003) survives; an averaging resample would
+	//     blend opaque with transparent, fabricate partial-coverage cells, and bake
+	//     the solid-fill halo ADR-0006 rejects.
+	// Height always keeps chafa's averaging resample (bmpRows → 10 internal) — the
+	// vertical downscale ADR-0007 accepted. (--stretch makes our aspect win.)
+	const cellRows = BANNER_ROWS;
+	const cellCols = Math.max(
+		1,
+		Math.round((BANNER_ROWS * CHAR_CELL_ASPECT * bmpCols) / bmpRows),
+	);
+	const targetW = cellCols * 2;
+	const nativeFit = targetW === bmpCols + (bmpCols % 2); // exact, or odd→+1 pad
 	const TRANSPARENT = [0, 0, 0, 0];
-	const rgba = Buffer.alloc(pngCols * bmpRows * 4); // zeroed → padded px are transparent
+	const rgba = Buffer.alloc(targetW * bmpRows * 4);
 	for (let r = 0; r < bmpRows; r += 1) {
-		for (let c = 0; c < pngCols; c += 1) {
-			const [pr, pg, pb, pa] = c < bmpCols ? oriented[r][c] : TRANSPARENT;
-			const o = (r * pngCols + c) * 4;
+		for (let c = 0; c < targetW; c += 1) {
+			// Native fit: take the source column (or transparent pad past the edge).
+			// Aspect correction: centre-aligned nearest neighbour — map this output
+			// pixel's centre to a source column (clamped), so dup/drop spreads evenly.
+			const sx = nativeFit
+				? c
+				: Math.min(bmpCols - 1, Math.floor(((c + 0.5) * bmpCols) / targetW));
+			const [pr, pg, pb, pa] = nativeFit && c >= bmpCols ? TRANSPARENT : oriented[r][sx];
+			const o = (r * targetW + c) * 4;
 			rgba[o] = pr;
 			rgba[o + 1] = pg;
 			rgba[o + 2] = pb;
@@ -495,7 +535,7 @@ async function bake() {
 	const tmpDir = mkdtempSync(path.join(tmpdir(), "bake-header-"));
 	const tmpPng = path.join(tmpDir, "bitmap.png");
 	try {
-		await sharp(rgba, { raw: { width: pngCols, height: bmpRows, channels: 4 } })
+		await sharp(rgba, { raw: { width: targetW, height: bmpRows, channels: 4 } })
 			.png()
 			.toFile(tmpPng);
 
@@ -513,9 +553,11 @@ async function bake() {
  *
  * ${bannerRows.length} finished-ANSI lines of Unicode quadrant cells, folded by
  * chafa (\`--symbols quad\`) from the ${bmpCols}×${bmpRows} art grid decoded out of
- * the labelled colour-chart source \`packages/header/assets/pokemon.png\`. Width is
- * padded to even and folded 2:1 (no resample); height is resampled 2:1 to halve
- * the row count (ADR-0007, reopening ADR-0006). Each cell carries one truecolor
+ * the labelled colour-chart source \`packages/header/assets/pokemon.png\`. The art
+ * is scaled to a fixed 5-row banner whose width preserves the source aspect
+ * ratio on a ~2:1 character grid: width is nearest-neighbour resampled (hard
+ * alpha preserved, so the float survives), height is averaging-resampled
+ * (ADR-0008, reopening ADR-0007). Each cell carries one truecolor
  * foreground + one truecolor background and a glyph from the 16-member
  * block-quadrant set; transparent source cells emit no background SGR, so the
  * sprite floats on the terminal background (ADR-0003 invariant, preserved).
