@@ -1,6 +1,6 @@
 /**
  * chart-to-sprite: general instruction-chart decoder (run via `npm run
- * decode:chart -- <input.png> [-o out.png] [--dedither]`).
+ * decode:chart -- <input.png> [-o out.png] [--scale N] [--dedither]`).
  *
  * Input is an **instruction chart** — a labelled colour-chart render where
  * each art cell is a flat colour block stamped with a numeric colour code,
@@ -68,10 +68,15 @@ import sharp from "sharp";
 // ---------------------------------------------------------------------------
 // CLI
 
+// The cell-to-pixel-per-side scale cap: a sanity limit, not a capability
+// boundary (ADR 0011). Its only job is to refuse a fat-fingered `--scale 3200`
+// before it allocates a multi-gigabyte buffer.
+const SCALE_MAX = 32;
+
 function usage(message) {
 	if (message) console.error(`decode:chart: ${message}`);
 	console.error(
-		"Usage: npm run decode:chart -- <input.png> [-o <output.png>] [--dedither]",
+		"Usage: npm run decode:chart -- <input.png> [-o <output.png>] [--scale <1-32>] [--dedither]",
 	);
 	process.exit(1);
 }
@@ -80,6 +85,7 @@ const argv = process.argv.slice(2);
 let input = null;
 let output = null;
 let dedither = false;
+let scale = 1;
 for (let i = 0; i < argv.length; i += 1) {
 	const arg = argv[i];
 	if (arg === "--dedither") {
@@ -88,6 +94,16 @@ for (let i = 0; i < argv.length; i += 1) {
 		i += 1;
 		if (i >= argv.length) usage("-o requires a path");
 		output = argv[i];
+	} else if (arg === "--scale") {
+		i += 1;
+		if (i >= argv.length) usage("--scale requires an integer");
+		// Reject loudly; never coerce (ADR 0011). `Number` + integer/range
+		// checks catch non-numeric, non-integer, sub-1, and over-cap values.
+		const value = Number(argv[i]);
+		if (!Number.isInteger(value) || value < 1 || value > SCALE_MAX) {
+			usage(`--scale must be an integer between 1 and ${SCALE_MAX}, got "${argv[i]}"`);
+		}
+		scale = value;
 	} else if (arg.startsWith("-")) {
 		usage(`unknown flag ${arg}`);
 	} else if (input === null) {
@@ -597,28 +613,41 @@ async function decode() {
 		);
 	}
 
-	// Emit the sprite PNG: 1 cell = 1 pixel on the full ruled canvas.
-	const rgba = Buffer.alloc(cols * rows * 4);
+	// Emit the sprite PNG. The decode stayed 1:1 on the canonical grid;
+	// `--scale N` is a pure output-stage transform (ADR 0011) — each decoded
+	// cell expands into an N×N block by an exact buffer copy (no sharp resize,
+	// so no interpolation can soften the pixel-art edges). At N=1 this is the
+	// pre-ADR 1:1 emit unchanged.
+	const outW = cols * scale;
+	const outH = rows * scale;
+	const rgba = Buffer.alloc(outW * outH * 4);
 	for (let r = 0; r < rows; r += 1) {
 		for (let c = 0; c < cols; c += 1) {
 			const [pr, pg, pb, pa] = bitmap[r][c];
-			const o = (r * cols + c) * 4;
-			rgba[o] = pr;
-			rgba[o + 1] = pg;
-			rgba[o + 2] = pb;
-			rgba[o + 3] = pa;
+			for (let dy = 0; dy < scale; dy += 1) {
+				for (let dx = 0; dx < scale; dx += 1) {
+					const o = ((r * scale + dy) * outW + (c * scale + dx)) * 4;
+					rgba[o] = pr;
+					rgba[o + 1] = pg;
+					rgba[o + 2] = pb;
+					rgba[o + 3] = pa;
+				}
+			}
 		}
 	}
-	await sharp(rgba, { raw: { width: cols, height: rows, channels: 4 } })
+	await sharp(rgba, { raw: { width: outW, height: outH, channels: 4 } })
 		.png()
 		.toFile(output);
 
 	// Summary + preview: the operator compares these counts against the
-	// chart's legend by eye — the counts are never OCR'd (ADR-0009).
+	// chart's legend by eye — the counts are never OCR'd (ADR-0009). The
+	// canonical cols×rows stays primary (it's what the counts refer to); the
+	// scaled pixel dimensions are appended only when scaled (ADR 0011).
 	console.log(preview(bitmap));
 	const opaque = [...colourCounts.values()].reduce((a, b) => a + b, 0);
+	const scaleNote = scale > 1 ? ` (${outW}×${outH} px @${scale}×)` : "";
 	console.log(
-		`\nDecoded ${cols}×${rows} ruled canvas (${opaque} coded cells, ${cols * rows - opaque} transparent) → ${output}`,
+		`\nDecoded ${cols}×${rows} ruled canvas (${opaque} coded cells, ${cols * rows - opaque} transparent) → ${output}${scaleNote}`,
 	);
 	console.log(
 		`Legend swatches sampled: ${legendPalette.length} (+ white, implicitly valid); worst palette snap: ${worstSnap} (0 = lossless source, cap ${SNAP_MAX_DELTA})`,
