@@ -9,7 +9,6 @@ import {
 	compactList,
 	composeHeader,
 	composeLogoCell,
-	flipSpriteRows,
 	formatContextPath,
 	formatDisplayPath,
 	getCompactExtensionLabels,
@@ -314,28 +313,6 @@ describe("composeHeader", () => {
 			expect(line).not.toContain("│");
 			expect(visibleWidth(line)).toBeLessThanOrEqual(7);
 		}
-	});
-});
-
-// ── flipSpriteRows ───────────────────────────────────────────────────────────
-
-const stripAnsi = (s: string) => s.replace(new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g"), "");
-
-describe("flipSpriteRows", () => {
-	it("reverses each row's cells, keeping each colour with its glyph", () => {
-		const row = "[31mA[32mB[33mC[0m";
-		expect(flipSpriteRows([row])).toEqual(["[33mC[32mB[31mA[0m"]);
-	});
-
-	it("mirrors half-block cells left-to-right without swapping top/bottom halves", () => {
-		// A horizontal flip is column-order only: ▀ (top pixel) and ▄ (bottom pixel)
-		// are vertical halves, so they stay themselves — just move to mirrored columns.
-		const row = "[49m [38;2;1;2;3;49m▄[38;2;4;5;6;48;2;7;8;9m▀[0m";
-		const [flipped] = flipSpriteRows([row]);
-		expect(stripAnsi(row)).toBe(" ▄▀");
-		expect(stripAnsi(flipped)).toBe("▀▄ ");
-		// Printed width is unchanged by the mirror.
-		expect(visibleWidth(flipped)).toBe(visibleWidth(row));
 	});
 });
 

@@ -32,7 +32,6 @@ import {
 	buildResourceSections,
 	composeHeader,
 	composeLogoCell,
-	flipSpriteRows,
 	renderWordmark,
 	type ResourceSection,
 } from "./lib";
@@ -44,7 +43,7 @@ import {
  * title over the resource sections), composed by {@link composeHeader} (ADR-0005).
  */
 function renderHeader(theme: Theme, width: number, cwd: string, sections: ResourceSection[]): string[] {
-	const logoRows = composeLogoCell({ spriteRows: flipSpriteRows(BANNER), wordmarkRows: renderWordmark(theme) });
+	const logoRows = composeLogoCell({ spriteRows: BANNER, wordmarkRows: renderWordmark(theme) });
 	const metaLines = buildMetadataLines(theme, { cwd, version: VERSION, sections });
 	return composeHeader(theme, { spriteRows: logoRows, metaLines, width });
 }

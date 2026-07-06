@@ -299,26 +299,6 @@ function padLineToWidth(line: string, width: number): string {
 }
 
 /**
- * Mirror the baked sprite horizontally by reversing the half-block cells in each
- * row. Each cell (its ANSI colour prefix plus one glyph) travels as a unit, so
- * colours stay attached; the vertical halves `▀`/`▄` are unchanged by a
- * left-right flip. A trailing reset escape is preserved at the row's end.
- */
-export function flipSpriteRows(rows: string[]): string[] {
-	const esc = String.fromCharCode(27);
-	// A cell is its SGR colour prefix (zero or more escapes) plus one glyph.
-	const cellRe = new RegExp("(?:" + esc + "\\[[0-9;]*m)*[^" + esc + "]", "g");
-	// Escapes trailing the last glyph (e.g. the reset) are not a cell.
-	const trailingRe = new RegExp("(?:" + esc + "\\[[0-9;]*m)+$");
-	return rows.map((row) => {
-		const suffix = row.match(trailingRe)?.[0] ?? "";
-		const body = suffix ? row.slice(0, row.length - suffix.length) : row;
-		const cells = body.match(cellRe) ?? [];
-		return cells.reverse().join("") + suffix;
-	});
-}
-
-/**
  * Assemble the logo cell: the baked sprite with the code-drawn wordmark placed
  * immediately to its right, vertically centred against the taller sprite band
  * (ADR-0005). Each sprite row is padded to the sprite's *printed* width so the

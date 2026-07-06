@@ -37,6 +37,11 @@
  * shows through: a fully-transparent cell is a plain space, and a
  * half-transparent cell uses `▀`/`▄` with only the opaque half coloured.
  *
+ * The sprite is mirrored horizontally at bake time (ADR-0006). The default
+ * reverses the decoded bitmap's columns before the half-block fold, so the
+ * baked artifact ships already-oriented and the runtime prints it as-is — no
+ * per-draw cell reversal; `--no-flip` bakes it unmirrored instead.
+ *
  * The generated file emits `\u001b` escape sequences (via JSON.stringify),
  * never raw ESC bytes, so it stays lint- and type-clean inside `check`.
  */
@@ -51,6 +56,15 @@ const repoRoot = path.resolve(scriptDir, "..");
 
 const SOURCE = path.join(repoRoot, "packages/header/assets/pokemon.png");
 const OUTPUT = path.join(repoRoot, "packages/header/banner.ts");
+
+/**
+ * Bake-time mirror toggle (ADR-0006). The default reverses the decoded bitmap's
+ * columns before the fold, so `banner.ts` ships the already-oriented art and the
+ * render path prints it as-is with no per-draw cell reversal. `--no-flip` bakes
+ * it unmirrored; `--flip` is accepted for explicitness. Pass flags through npm
+ * as `npm run bake:header -- --no-flip`.
+ */
+const flip = !process.argv.slice(2).includes("--no-flip");
 
 const ESC = "";
 const UPPER_HALF = "▀"; // top half painted (foreground), bottom half is background
@@ -306,6 +320,12 @@ async function bake() {
 	const bmpRows = bitmap.length;
 	const bmpCols = bitmap[0].length;
 
+	// Bake-time mirror (ADR-0006): reverse each row's columns before the fold.
+	// The half-block fold pairs vertical pixels, so a horizontal column reversal
+	// commutes through it and reproduces the old render-time cell flip exactly —
+	// `banner.ts` is then printed as-is, no runtime reversal.
+	const oriented = flip ? bitmap.map((row) => row.slice().reverse()) : bitmap;
+
 	// Pair vertical bitmap pixels into half-block cells; an odd final row pairs
 	// with a transparent bottom (rendered as an upper half over default bg).
 	const TRANSPARENT = [0, 0, 0, 0];
@@ -313,7 +333,7 @@ async function bake() {
 	for (let r = 0; r < bmpRows; r += 2) {
 		let line = "";
 		for (let c = 0; c < bmpCols; c += 1) {
-			line += cell(bitmap[r][c], r + 1 < bmpRows ? bitmap[r + 1][c] : TRANSPARENT);
+			line += cell(oriented[r][c], r + 1 < bmpRows ? oriented[r + 1][c] : TRANSPARENT);
 		}
 		bannerRows.push(line + RESET);
 	}
@@ -325,8 +345,10 @@ async function bake() {
  * ${bannerRows.length} finished-ANSI lines of Unicode half-block cells, reconstructed once
  * from the ${bmpCols}×${bmpRows} art grid decoded from the labelled colour-chart source
  * \`packages/header/assets/pokemon.png\`. Imported by the header at runtime; the
- * shipped extension never decodes the source image. Re-run the regen script and
- * re-commit this file when the source asset changes.
+ * shipped extension never decodes the source image. The mirror orientation is
+ * chosen here (bake flip ${flip ? "on — mirrored" : "off — unmirrored"}), so the
+ * render path prints the lines as-is with no runtime flip (ADR-0006). Re-run the
+ * regen script and re-commit this file when the source asset changes.
  */
 
 export const BANNER: string[] = [
@@ -339,7 +361,7 @@ ${body}
 	// Preview: print the finished banner so the operator eyeballs the real render.
 	console.log(bannerRows.join("\n"));
 	console.log(
-		`\nBaked ${bannerRows.length} banner rows from a ${bmpCols}×${bmpRows} art grid → ${path.relative(repoRoot, OUTPUT)}`,
+		`\nBaked ${bannerRows.length} banner rows (${flip ? "mirrored" : "unmirrored"}) from a ${bmpCols}×${bmpRows} art grid → ${path.relative(repoRoot, OUTPUT)}`,
 	);
 }
 
