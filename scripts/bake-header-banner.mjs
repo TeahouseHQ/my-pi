@@ -123,8 +123,14 @@ function isGridline(r, g, b) {
  * off-period noise. Returns the gridline coordinates (cell edges).
  *
  * `at(i, j)` reads the pixel at position `i` along this axis, `j` across it.
+ * `axisLabel` ("vertical"/"horizontal") names the axis in error messages.
+ *
+ * Throws a clear, actionable error — rather than crashing on an empty gap
+ * histogram — when too few full-span lines survive to recover a period (e.g. a
+ * gridless source, or a chart whose grid one axis overpaints). The wrong-format
+ * case is a caller error, not a stack trace.
  */
-function detectGridlines(at, length, bandStart, bandEnd) {
+function detectGridlines(at, length, bandStart, bandEnd, axisLabel) {
 	const band = bandEnd - bandStart;
 	const candidates = [];
 	for (let i = 0; i < length; i += 1) {
@@ -161,6 +167,19 @@ function detectGridlines(at, length, bandStart, bandEnd) {
 	for (let i = 1; i < lines.length; i += 1) {
 		const d = lines[i] - lines[i - 1];
 		if (d >= 15 && d <= 30) gaps[d] = (gaps[d] || 0) + 1;
+	}
+	// Need ≥2 surviving lines with a 15–30px gap to recover a period. Fewer means
+	// the full-span heuristic rejected the grid (art overpainting it on one axis,
+	// or a gridless source) — error clearly here rather than dereference an empty
+	// gap histogram downstream and stack-trace. This also protects the callers,
+	// which index `gridX[1]` / `gridY[1]` and so require a ≥2-entry lattice.
+	if (lines.length < 2 || Object.keys(gaps).length === 0) {
+		throw new Error(
+			`bake:header: could not recover the ${axisLabel} gridline lattice ` +
+				`(${lines.length} full-span gridline${lines.length === 1 ? "" : "s"} found; need ≥2 on a 15–30px period). ` +
+				"The source must be a labelled colour-chart render with a uniform grey grid on BOTH axes; a gridless or single-axis source reopens ADR 0004. " +
+				'See README → "Regenerating the banner" → "The source image format".',
+		);
 	}
 	const period = Number(Object.entries(gaps).sort((a, b) => b[1] - a[1])[0][0]);
 
@@ -347,8 +366,8 @@ async function bake() {
 	// their right and its short vertical lines are rejected), then the
 	// horizontal gridlines within the art's x-band so the legend — which shares
 	// the top rows — cannot inflate their span.
-	const gridX = detectGridlines((i, j) => at(i, j), W, 0, H);
-	const gridY = detectGridlines((i, j) => at(j, i), H, gridX[0], gridX[gridX.length - 1]);
+	const gridX = detectGridlines((i, j) => at(i, j), W, 0, H, "vertical");
+	const gridY = detectGridlines((i, j) => at(j, i), H, gridX[0], gridX[gridX.length - 1], "horizontal");
 	const cols = gridX.length - 1;
 	const rows = gridY.length - 1;
 	const inset = Math.max(2, Math.round((gridX[1] - gridX[0]) * 0.18));
