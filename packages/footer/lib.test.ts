@@ -7,7 +7,6 @@ import {
 	parseGitPorcelainV2,
 	isLinkedWorktree,
 	parseStashCount,
-	thinkingLabel,
 } from "./lib";
 
 // ── fmtTokens ──────────────────────────────────────────────────────────────
@@ -29,24 +28,6 @@ describe("fmtTokens", () => {
 		expect(fmtTokens(1_000_000)).toBe("1.00M");
 		expect(fmtTokens(1_234_567)).toBe("1.23M");
 		expect(fmtTokens(12_000_000)).toBe("12.00M");
-	});
-});
-
-// ── thinkingLabel ──────────────────────────────────────────────────────────
-
-describe("thinkingLabel", () => {
-	it("maps known levels to short labels", () => {
-		expect(thinkingLabel("off")).toBe("off");
-		expect(thinkingLabel("minimal")).toBe("min");
-		expect(thinkingLabel("low")).toBe("low");
-		expect(thinkingLabel("medium")).toBe("med");
-		expect(thinkingLabel("high")).toBe("high");
-		expect(thinkingLabel("xhigh")).toBe("max");
-	});
-
-	it("passes through unknown levels", () => {
-		expect(thinkingLabel("ultra")).toBe("ultra");
-		expect(thinkingLabel("")).toBe("");
 	});
 });
 

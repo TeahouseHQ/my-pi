@@ -1,9 +1,13 @@
 /**
  * Footer — Single-line custom footer for Pi
  *
- * Replaces the default footer with a single line showing:
- *   model[provider] | branch ↑N ↓N | +N ~N ?N ✕N ⚑N | cwd | ctx: x% (used/total) | ⇡in ⇣out | thinking
+ * Replaces the default footer with a single line, each widget prefixed with a
+ * Nerd Font glyph (requires a Nerd Font-patched terminal font):
+ *    cwd |  branch ↑N ↓N |  +N ~N ?N ✕N ⚑N |  [bar] |  ⇡in ⇣out |  model[provider]
  * All segments joined by " | ".
+ *
+ * The thinking level is intentionally absent here — it lives on the prompt's
+ * bottom border instead (see the prompt-prefix package).
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -16,11 +20,25 @@ import {
 	isLinkedWorktree,
 	parseGitPorcelainV2,
 	parseStashCount,
-	thinkingLabel,
 	type GitStatus,
 } from "./lib";
 
 const SEP = " | ";
+
+/**
+ * Nerd Font glyphs used to prefix each footer widget. Codepoints sit in the
+ * Private Use Area, so they only render with a Nerd Font-patched font; the
+ * comment names each glyph for anyone swapping them out.
+ */
+const ICON = {
+	cwd: "\uf07b", // nf-fa-folder
+	branch: "\ue0a0", // nf-pl-branch
+	worktree: "\uf1bb", // nf-fa-tree
+	git: "",
+	context: "\uf0e4", // nf-fa-dashboard (gauge)
+	tokens: "\uf0ec", // nf-fa-exchange
+	model: "\uf2db", // nf-fa-microchip
+} as const;
 
 let cachedGitStatus: GitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
 let cachedStashCount = 0;
@@ -54,15 +72,7 @@ async function refreshGitStatus(pi: ExtensionAPI, cwd: string) {
 }
 
 export function registerFooter(pi: ExtensionAPI) {
-	let thinkingLevel = "off";
-
-	pi.on("thinking_level_select", async (event) => {
-		thinkingLevel = event.level;
-	});
-
 	pi.on("session_start", async (_event, ctx) => {
-		thinkingLevel = pi.getThinkingLevel();
-
 		// Refresh git status periodically
 		refreshGitStatus(pi, ctx.cwd);
 		if (gitStatusTimer) clearInterval(gitStatusTimer);
@@ -93,14 +103,14 @@ export function registerFooter(pi: ExtensionAPI) {
 					const hasUpstream = cachedGitStatus.ahead > 0 || cachedGitStatus.behind > 0;
 					let branchSegment = "";
 					if (branch) {
-						const worktreeMark = cachedIsWorktree ? "🌳 " : "";
+						const worktreeMark = cachedIsWorktree ? `${ICON.worktree} ` : "";
 						if (hasUpstream) {
 							const parts: string[] = [];
 							if (cachedGitStatus.ahead) parts.push(`↑${cachedGitStatus.ahead}`);
 							if (cachedGitStatus.behind) parts.push(`↓${cachedGitStatus.behind}`);
-							branchSegment = `${worktreeMark}${branch} ${parts.join(" ")}`;
+							branchSegment = `${ICON.branch} ${worktreeMark}${branch} ${parts.join(" ")}`;
 						} else {
-							branchSegment = `${worktreeMark}${branch}`;
+							branchSegment = `${ICON.branch} ${worktreeMark}${branch}`;
 						}
 					}
 
@@ -109,7 +119,7 @@ export function registerFooter(pi: ExtensionAPI) {
 					const isClean = s.staged === 0 && s.modified === 0 && s.untracked === 0 && s.conflicted === 0 && cachedStashCount === 0;
 					let fileStatusSegment: string | undefined;
 					if (isClean) {
-						fileStatusSegment = theme.fg("success", "✓");
+						fileStatusSegment = `${theme.fg("success", "✓")}`;
 					} else {
 						const parts: string[] = [];
 						if (s.staged) parts.push(theme.fg("success", `+${s.staged}`));
@@ -117,11 +127,11 @@ export function registerFooter(pi: ExtensionAPI) {
 						if (s.untracked) parts.push(theme.fg("warning", `?${s.untracked}`));
 						if (s.conflicted) parts.push(theme.fg("error", `✕${s.conflicted}`));
 						if (cachedStashCount) parts.push(theme.fg("accent", `⚑${cachedStashCount}`));
-						fileStatusSegment = parts.join(" ");
+						fileStatusSegment = `${parts.join(" ")}`;
 					}
 
 					// --- CWD ---
-					const cwdStr = `📁 ${ctx.cwd.split("/").pop() ?? ctx.cwd}`;
+					const cwdStr = `${ICON.cwd} ${ctx.cwd.split("/").pop() ?? ctx.cwd}`;
 
 					// --- Context usage (health bar) ---
 					const usage = ctx.getContextUsage();
@@ -133,14 +143,11 @@ export function registerFooter(pi: ExtensionAPI) {
 						if (usage.percent > 50) barColor = "error";
 						else if (usage.percent >= 20) barColor = "warning";
 					}
-					const ctxStr = theme.fg(barColor, barRaw);
+					const ctxStr = theme.fg(barColor, `${ICON.context} ${barRaw}`);
 
 					// --- Token totals ---
 					const { input, output } = countTokens(ctx.sessionManager.getBranch());
-					const tokenStr = `⇡${fmtTokens(input)} ⇣${fmtTokens(output)}`;
-
-					// --- Thinking level ---
-					const thinkStr = `think: ${thinkingLabel(thinkingLevel)}`;
+					const tokenStr = `${ICON.tokens} ⇡${fmtTokens(input)} ⇣${fmtTokens(output)}`;
 
 					const segments: string[] = [
 						theme.fg("toolTitle", cwdStr),
@@ -154,8 +161,7 @@ export function registerFooter(pi: ExtensionAPI) {
 					segments.push(
 						ctxStr,
 						theme.fg("toolTitle", tokenStr),
-						theme.fg("accent", modelStr),
-						theme.fg("mdLink", thinkStr),
+						theme.fg("accent", `${ICON.model} ${modelStr}`),
 					);
 					const line = segments.join(theme.fg("dim", SEP));
 					return [truncateToWidth(line, width)];

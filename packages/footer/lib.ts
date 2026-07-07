@@ -2,24 +2,6 @@
  * Pure, testable functions extracted from the my-pi extension.
  */
 
-// ── Thinking level labels ──────────────────────────────────────────────────
-
-const THINKING_LABELS: Record<string, string> = {
-	off: "off",
-	minimal: "min",
-	low: "low",
-	medium: "med",
-	high: "high",
-	xhigh: "max",
-};
-
-export { THINKING_LABELS };
-
-/** Map a thinking-level identifier to its display label. */
-export function thinkingLabel(level: string): string {
-	return THINKING_LABELS[level] ?? level;
-}
-
 // ── Token formatting ───────────────────────────────────────────────────────
 
 /** Format a token count as a compact human-readable string. */
