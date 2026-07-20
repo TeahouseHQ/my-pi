@@ -373,14 +373,17 @@ export function composeHeader(
 }
 
 /**
- * Build the Context / Skills / Extensions sections from loaded resources.
- * Empty sections are omitted, matching Pi's behaviour.
+ * Build the Context / Skills / Extensions / Subagents sections from loaded
+ * resources. Empty sections are omitted, matching Pi's behaviour. Sections are
+ * ordered core-resources-first (Context, Skills, Extensions), add-on-capabilities-
+ * last (Subagents).
  */
 export function buildResourceSections(input: {
 	cwd: string;
 	contextFiles: Array<{ path: string }>;
 	skills: Array<{ name: string }>;
 	extensions: ResourceRef[];
+	agents: Array<{ name: string }>;
 }): ResourceSection[] {
 	const sections: ResourceSection[] = [];
 
@@ -405,6 +408,13 @@ export function buildResourceSections(input: {
 		const labels = compactList(getCompactExtensionLabels(input.extensions));
 		if (labels.length > 0) {
 			sections.push({ name: "Extensions", labels, showCount: true });
+		}
+	}
+
+	if (input.agents.length > 0) {
+		const labels = compactList(input.agents.map((agent) => agent.name));
+		if (labels.length > 0) {
+			sections.push({ name: "Subagents", labels, showCount: true });
 		}
 	}
 

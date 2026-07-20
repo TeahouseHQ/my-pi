@@ -457,6 +457,24 @@ const SubagentParams = Type.Object({
 });
 
 export function registerSubagent(pi: ExtensionAPI) {
+	// Surface a startup warning when the tool's default (user-scope) discovery
+	// finds no agent definitions — the most common cause is forgetting the
+	// README's symlink step. Fires only when a UI can show it; headless modes
+	// (json/print, incl. spawned subagent subprocesses) skip the pointless work.
+	pi.on("session_start", async (_event, ctx) => {
+		if (!ctx.hasUI) return;
+		const { agents } = discoverAgents(ctx.cwd, "user");
+		if (agents.length > 0) return;
+
+		const agentsDir = path.join(getAgentDir(), "agents");
+		const home = os.homedir();
+		const displayDir = home && agentsDir.startsWith(home) ? `~${agentsDir.slice(home.length)}` : agentsDir;
+		ctx.ui.notify(
+			`No subagents found in ${displayDir}. See packages/subagent/README.md for the symlink setup.`,
+			"warning",
+		);
+	});
+
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",

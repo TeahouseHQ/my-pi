@@ -22,6 +22,20 @@ _Avoid_: "trigger"
 The ordered set of history entries, newest last. Globally deduplicated: submitting a prompt equal to an existing entry removes the old occurrence and re-inserts it as the newest. Only genuine LLM prompts are recorded — slash-commands, bash-mode lines, and empty submits are excluded.
 _Avoid_: "history file" (that's the storage detail, not the concept)
 
+### Subagents
+
+**Subagent**:
+A delegatable specialist the `subagent` tool spawns in an isolated `pi` process, defined by an **agent definition**. Distinct from Pi's "agent" (the assistant itself) — a subagent is always *sub*-ordinate, invoked on demand, never the top-level loop. Listed in the header's **`Subagents`** section.
+_Avoid_: "agent" alone (collides with Pi's own assistant — only say "agent" inside the compound "agent definition"/"agent scope"), "delegate"/"specialist" (fanciful synonyms with no codebase precedent)
+
+**Agent definition**:
+A markdown file (YAML frontmatter + a system-prompt body) that configures one subagent: its `name`, `description`, optional `tools`/`model`. Lives in `~/.pi/agent/agents` (user scope, always loaded) or `.pi/agents` (project scope, opt-in via `agentScope`). Parsed by `discoverAgents` in `packages/subagent/agents.ts`.
+_Avoid_: "agent file", "prompt" (collides with prompt-templates and LLM turns)
+
+**Available agents**:
+The discoverable set of user-scope **agent definitions** — the list the `subagent` tool offers by default (its `agentScope: "user"` default) and the list the header renders as the `Subagents` section (names only, `showCount`). Project-scope agents are deliberately excluded from both by default; opting into `agentScope: "both"` surfaces them only inside a tool invocation, never in the header.
+_Avoid_: "agent list" (use only informally), "roster"
+
 ### Header
 
 > Terminology note: these were renamed this session — **sprite** was "banner", **logo** was "wordmark", **Banner** was "logo cell". Code, docs, and the ADRs all use the new terms; only the ADR *filenames* (`NNNN-header-banner-*.md`) keep the old slug.

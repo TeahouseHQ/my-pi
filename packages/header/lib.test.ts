@@ -173,18 +173,20 @@ describe("compactList", () => {
 // ── buildResourceSections ────────────────────────────────────────────────────
 
 describe("buildResourceSections", () => {
-	it("builds Context, Skills, and Extensions sections", () => {
+	it("builds Context, Skills, Extensions, and Subagents sections", () => {
 		const sections = buildResourceSections({
 			cwd: "/proj",
 			contextFiles: [{ path: "/proj/AGENTS.md" }, { path: "/proj/docs/AGENTS.md" }],
 			skills: [{ name: "review" }, { name: "tdd" }],
 			extensions: [{ path: "/proj/header/index.ts", sourceInfo: localSource() }],
+			agents: [{ name: "scout" }, { name: "planner" }],
 		});
 
 		expect(sections).toEqual([
 			{ name: "Context", labels: ["AGENTS.md", "docs/AGENTS.md"] },
 			{ name: "Skills", labels: ["review", "tdd"], showCount: true },
 			{ name: "Extensions", labels: ["header"], showCount: true },
+			{ name: "Subagents", labels: ["planner", "scout"], showCount: true },
 		]);
 	});
 
@@ -194,19 +196,22 @@ describe("buildResourceSections", () => {
 			contextFiles: [],
 			skills: [{ name: "tdd" }],
 			extensions: [],
+			agents: [],
 		});
 		expect(sections).toEqual([{ name: "Skills", labels: ["tdd"], showCount: true }]);
 	});
 
-	it("sorts skills and extensions but keeps context-file order", () => {
+	it("sorts skills, extensions, and subagents but keeps context-file order", () => {
 		const sections = buildResourceSections({
 			cwd: "/proj",
 			contextFiles: [{ path: "/proj/z.md" }, { path: "/proj/a.md" }],
 			skills: [{ name: "zebra" }, { name: "apple" }],
 			extensions: [],
+			agents: [{ name: "worker" }, { name: "scout" }],
 		});
 		expect(sections[0]).toEqual({ name: "Context", labels: ["z.md", "a.md"] });
 		expect(sections[1]).toEqual({ name: "Skills", labels: ["apple", "zebra"], showCount: true });
+		expect(sections[2]).toEqual({ name: "Subagents", labels: ["scout", "worker"], showCount: true });
 	});
 });
 

@@ -26,6 +26,7 @@ import {
 	type ExtensionAPI,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
+import { discoverAgents } from "../subagent/agents";
 import { SPRITE } from "./sprite";
 import {
 	buildMetadataLines,
@@ -71,6 +72,7 @@ async function loadResourceSections(cwd: string): Promise<ResourceSection[]> {
 			contextFiles: loader.getAgentsFiles().agentsFiles,
 			skills: loader.getSkills().skills,
 			extensions: loader.getExtensions().extensions,
+			agents: discoverAgents(cwd, "user").agents.map((agent) => ({ name: agent.name })),
 		});
 	} catch {
 		return [];
