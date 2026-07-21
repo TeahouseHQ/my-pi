@@ -73,6 +73,10 @@ async function refreshGitStatus(pi: ExtensionAPI, cwd: string) {
 
 export function registerFooter(pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
+		// The footer only renders in the TUI; in json/print/rpc modes the
+		// factory is a no-op but the git-polling timer below would still spin.
+		if (ctx.mode !== "tui") return;
+
 		// Refresh git status periodically
 		refreshGitStatus(pi, ctx.cwd);
 		if (gitStatusTimer) clearInterval(gitStatusTimer);
