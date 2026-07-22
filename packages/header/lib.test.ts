@@ -229,16 +229,15 @@ describe("renderLogo", () => {
 	});
 
 	it("folds the 4×4 'Pi' mark (assets/pi.png) into scaled half-block blocks", () => {
-		// The mark is a 4×4 pixel-art grid, each module scaled up and folded into
-		// half-blocks (█ where both folded pixels are opaque, ▀/▄ at the odd-scale
-		// module seams, space otherwise).
+		// The mark is a 4×4 pixel-art grid, each module scaled up 2× and folded into
+		// half-blocks (█ where both folded pixels are opaque, space otherwise). Even
+		// scale lands module boundaries on cell boundaries, so every glyph is a crisp
+		// full block — no ▀/▄ seams.
 		expect(renderLogo(plainTheme)).toEqual([
-			"█████████   ",
-			"███▀▀▀███   ",
-			"███   ███   ",
-			"██████   ███",
-			"███▀▀▀   ███",
-			"███      ███",
+			"██████  ",
+			"██  ██  ",
+			"████  ██",
+			"██    ██",
 		]);
 	});
 });

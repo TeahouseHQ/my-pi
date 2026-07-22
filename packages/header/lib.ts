@@ -223,11 +223,12 @@ const LOGO_MODULES: string[] = [
 ];
 
 /**
- * Pixels per module edge — a 4×4 grid → a 12×12 pixel bitmap → 6 cell rows tall.
- * Odd, so module boundaries land mid-cell and fold to a few `▀`/`▄` seam rows
- * rather than all crisp full blocks — the tradeoff for this 75% size.
+ * Pixels per module edge — a 4×4 grid → an 8×8 pixel bitmap → 4 cell rows tall.
+ * Even, so module boundaries land on cell boundaries and fold to crisp full
+ * blocks (`█`) with no `▀`/`▄` seams. Smaller than the 6-row sprite, so
+ * `composeBanner` centres it vertically in the band (ADR 0005).
  */
-const LOGO_SCALE = 3;
+const LOGO_SCALE = 2;
 
 /** The scaled monochrome pixel bitmap — {@link LOGO_SCALE} px per module edge. */
 const LOGO_BITMAP: string[] = LOGO_MODULES.flatMap((row) => {

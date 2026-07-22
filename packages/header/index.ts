@@ -42,15 +42,16 @@ import {
  * a single horizontal band — the Banner (baked sprite plus the muted-gray
  * "Pi" logo), a theme-dim `│` divider, and a metadata column (accent cwd +
  * version title over the resource sections), composed by {@link composeHeader},
- * with a trailing blank row beneath the band (ADR-0005).
+ * with a leading and trailing blank row padding the band (ADR-0005).
  */
 function renderHeader(theme: Theme, width: number, cwd: string, sections: ResourceSection[]): string[] {
 	const bannerRows = composeBanner({ spriteRows: SPRITE, logoRows: renderLogo(theme) });
 	const metaLines = buildMetadataLines(theme, { cwd, version: VERSION, sections });
 	// composeHeader lays out any left-column rows beside the divider; here that column is the Banner.
 	const band = composeHeader(theme, { spriteRows: bannerRows, metaLines, width });
-	// A blank 7th row breathes space between the header band and the prompt below.
-	return [...band, ""];
+	// Blank rows above and below the band breathe space between it and the
+	// screen edge / the prompt below.
+	return ["", ...band, ""];
 }
 
 /**
