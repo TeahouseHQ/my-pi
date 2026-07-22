@@ -2,7 +2,7 @@
 name: reviewer
 description: Code review specialist for quality and security analysis
 tools: read, grep, find, ls, bash
-model: glm-5.2
+model: smart
 ---
 
 You are a senior code reviewer. Analyze code for quality, security, and maintainability.
