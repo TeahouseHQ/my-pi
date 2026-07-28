@@ -36,6 +36,10 @@ _Avoid_: "agent file", "prompt" (collides with prompt-templates and LLM turns)
 The discoverable set of user-scope **agent definitions** — the list the `subagent` tool offers by default (its `agentScope: "user"` default) and the list the header renders as the `Subagents` section (names only, `showCount`). Project-scope agents are deliberately excluded from both by default; opting into `agentScope: "both"` surfaces them only inside a tool invocation, never in the header.
 _Avoid_: "agent list" (use only informally), "roster"
 
+**Nesting depth**:
+How many `pi` processes deep a subagent invocation is. The top-level conversation is depth 0; each spawned subagent is one deeper. Capped at `MAX_SUBAGENT_DEPTH` (2, hardcoded in `packages/subagent/index.ts`): before spawning, a process reads its own inherited `PI_SUBAGENT_DEPTH` env var (default 0), and if `depth + 1` would exceed the cap it refuses **parent-side — the too-deep subprocess never starts**. The refusal surfaces as a normal tool error (`isError: true`, via `errorMessage`) across all three modes, identical in shape to the unknown-agent pre-spawn refusal. The parent injects `PI_SUBAGENT_DEPTH = depth + 1` into the child's spawn env (`spawn` inherits it into the child's `process.env`); the depth is otherwise invisible to the model — it appears only in the limit-reached error message. Malformed or absent env → depth 0.
+_Avoid_: "recursion level", "subagent level" (no codebase precedent), "depth limit" (that's the cap value, not the per-invocation concept)
+
 ### Header
 
 > Terminology note: these were renamed this session — **sprite** was "banner", **logo** was "wordmark", **Banner** was "logo cell". Code, docs, and the ADRs all use the new terms; only the ADR *filenames* (`NNNN-header-banner-*.md`) keep the old slug.

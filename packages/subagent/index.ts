@@ -33,6 +33,10 @@ const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
+// Max subagent nesting depth. The top-level conversation is depth 0; each
+// spawned subagent is one deeper. A spawn that would exceed this is refused
+// parent-side (see the guard in runSingleAgent) before the subprocess starts.
+const MAX_SUBAGENT_DEPTH = 2;
 
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
@@ -261,6 +265,16 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	return { command: "pi", args };
 }
 
+/**
+ * Parse the inherited nesting depth from PI_SUBAGENT_DEPTH.
+ * Top-level pi has no env (undefined → 0); a malformed value also falls back to 0
+ * rather than erroring, since only a misconfigured parent could set one.
+ */
+function parseDepth(raw: string | undefined): number {
+	const n = Number(raw);
+	return Number.isInteger(n) && n >= 0 ? n : 0;
+}
+
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
 async function runSingleAgent(
@@ -274,6 +288,28 @@ async function runSingleAgent(
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
 ): Promise<SingleResult> {
+	// Nesting guard: read this process's inherited depth and refuse to spawn if
+	// the child would exceed the cap. Fires before the agent lookup so the model
+	// gets "stop delegating" rather than being invited to retry with another agent.
+	const currentDepth = parseDepth(process.env.PI_SUBAGENT_DEPTH);
+	const childDepth = currentDepth + 1;
+	if (childDepth > MAX_SUBAGENT_DEPTH) {
+		return {
+			agent: agentName,
+			agentSource: "unknown",
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: "",
+			errorMessage:
+				`Subagent nesting limit reached: spawning "${agentName}" would hit depth ${childDepth}, ` +
+				`exceeding the max of ${MAX_SUBAGENT_DEPTH} (this process is at depth ${currentDepth}). ` +
+				`Handle the task directly instead of delegating.`,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
+
 	const agent = agents.find((a) => a.name === agentName);
 
 	if (!agent) {
@@ -335,6 +371,7 @@ async function runSingleAgent(
 				cwd: cwd ?? defaultCwd,
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
+				env: { ...process.env, PI_SUBAGENT_DEPTH: String(childDepth) },
 			});
 			let buffer = "";
 
