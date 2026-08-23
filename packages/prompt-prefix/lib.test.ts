@@ -1,6 +1,6 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
-import { applyBottomStatus, applyPromptPrefix, BOTTOM_STATUS_TRAIL, PROMPT_PREFIX, thinkingLabel } from "./lib";
+import { applyBorderStatus, applyPromptPrefix, BORDER_STATUS_TRAIL, historyLabel, PROMPT_PREFIX, thinkingLabel } from "./lib";
 
 const STYLED = "\x1b[2m> \x1b[0m"; // styled "> ", 2 visible columns
 
@@ -53,7 +53,21 @@ describe("thinkingLabel", () => {
 	});
 });
 
-describe("applyBottomStatus", () => {
+describe("historyLabel", () => {
+	it("numbers the newest entry first", () => {
+		expect(historyLabel(0, ["newest", "older", "oldest"])).toBe("History [1/3]");
+		expect(historyLabel(1, ["newest", "older", "oldest"])).toBe("History [2/3]");
+	});
+
+	it("is absent outside browsing mode or for invalid state", () => {
+		expect(historyLabel(-1, ["prompt"])).toBeUndefined();
+		expect(historyLabel(1, ["prompt"])).toBeUndefined();
+		expect(historyLabel(0, [])).toBeUndefined();
+		expect(historyLabel("0", ["prompt"])).toBeUndefined();
+	});
+});
+
+describe("applyBorderStatus", () => {
 	// ANSI wrappers so visibleWidth() ignores the colour and only counts glyphs.
 	const border = (s: string) => `\x1b[90m${s}\x1b[0m`;
 	const status = (s: string) => `\x1b[35m${s}\x1b[0m`;
@@ -61,26 +75,26 @@ describe("applyBottomStatus", () => {
 	const dashes = (n: number) => "─".repeat(n);
 
 	it("right-aligns the label and preserves the border's visible width", () => {
-		const out = applyBottomStatus(dashes(40), 40, "think: high", style);
+		const out = applyBorderStatus(dashes(40), 40, "think: high", style);
 		expect(visibleWidth(out)).toBe(40);
 		// Label and trailing corner dashes share the status colour as one tinted run.
-		expect(out.endsWith(status(` think: high ${BOTTOM_STATUS_TRAIL}`))).toBe(true);
+		expect(out.endsWith(status(` think: high ${BORDER_STATUS_TRAIL}`))).toBe(true);
 	});
 
 	it("keeps the left border content, so a scroll indicator survives", () => {
 		const line = `─── ↓ 2 more ${dashes(27)}`; // 40 visible columns
-		const out = applyBottomStatus(line, 40, "think: high", style);
+		const out = applyBorderStatus(line, 40, "think: high", style);
 		expect(out).toContain("↓ 2 more");
 		expect(visibleWidth(out)).toBe(40);
 	});
 
 	it("tints the label and trailing dashes with the status colour", () => {
-		const out = applyBottomStatus(dashes(40), 40, "think: low", style);
-		expect(out).toContain(status(` think: low ${BOTTOM_STATUS_TRAIL}`));
+		const out = applyBorderStatus(dashes(40), 40, "think: low", style);
+		expect(out).toContain(status(` think: low ${BORDER_STATUS_TRAIL}`));
 	});
 
 	it("leaves the line untouched when it is too narrow for the frame", () => {
 		const narrow = dashes(10);
-		expect(applyBottomStatus(narrow, 10, "think: high", style)).toBe(narrow);
+		expect(applyBorderStatus(narrow, 10, "think: high", style)).toBe(narrow);
 	});
 });

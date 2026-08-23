@@ -8,7 +8,7 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | [**footer**](packages/footer/)               | Compact single-line status bar replacing the default footer                               |
 | [**header**](packages/header/)               | Replaces the built-in startup header (Pi version + keybinding hints) with a custom sprite |
-| [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron to the start of the input prompt                                      |
+| [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron plus thinking/history status to the input prompt                     |
 
 > Add new packages by creating a folder under `packages/` and registering it in `index.ts`.
 
@@ -90,7 +90,10 @@ the prefix never shifts text or breaks the surrounding box.
 The host resets editor padding to the `editorPaddingX` setting (default `0`)
 after the custom editor is installed and on every resize, so the package floors
 padding at two columns to keep a gutter for the chevron — effectively a minimum
-`editorPaddingX` of `2` while it's active.
+`editorPaddingX` of `2` while it's active. Its top border shows the selected
+entry while browsing prompt history, for example `History [2/17]`; the bottom
+border continues to show the current thinking level. The recency list persists
+per project in `~/.pi/agent/prompt-history/` and retains its 100 newest entries.
 
 ## Install
 

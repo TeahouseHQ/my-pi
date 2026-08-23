@@ -25,6 +25,20 @@ export function thinkingLabel(level: string): string {
 	return THINKING_LABELS[level] ?? level;
 }
 
+/** Format the active entry's one-based position in Pi's prompt history. */
+export function historyLabel(historyIndex: unknown, history: unknown): string | undefined {
+	if (
+		typeof historyIndex !== "number" ||
+		!Number.isInteger(historyIndex) ||
+		historyIndex < 0 ||
+		!Array.isArray(history) ||
+		historyIndex >= history.length
+	) {
+		return undefined;
+	}
+	return `History [${historyIndex + 1}/${history.length}]`;
+}
+
 /**
  * Overlay a prompt prefix onto an editor content line.
  *
@@ -43,16 +57,16 @@ export function applyPromptPrefix(line: string, styledPrefix: string, prefixWidt
 	return styledPrefix + line.slice(prefixWidth);
 }
 
-// ── Bottom-border status ────────────────────────────────────────────────────
+// ── Border status ───────────────────────────────────────────────────────────
 
-/** Trailing dashes between the status label and the right corner of the frame. */
-export const BOTTOM_STATUS_TRAIL = "──";
+/** Trailing dashes between the status label and the right edge of the frame. */
+export const BORDER_STATUS_TRAIL = "──";
 
 /** Minimum border dashes kept to the left of the status; below this we bail. */
 const MIN_LEFT_FILL = 4;
 
-/** Independent stylers for the two colour regions of the bottom status line. */
-export interface BottomStatusStyle {
+/** Independent stylers for the two colour regions of a border status line. */
+export interface BorderStatusStyle {
 	/** Tints the border dashes (and any left-pad we add). */
 	border: (str: string) => string;
 	/** Tints the status label itself (e.g. the thinking-level colour). */
@@ -60,26 +74,26 @@ export interface BottomStatusStyle {
 }
 
 /**
- * Overlay a right-aligned status label onto the editor's bottom border line.
+ * Overlay a right-aligned status label onto an editor border line.
  *
- * The incoming `line` is the editor's rendered bottom border: `width` visible
- * columns of dashes (or a "↓ N more" scroll indicator). We keep its left
- * `width - statusWidth` columns verbatim — ANSI-aware, so an existing scroll
- * indicator survives — and append ` label ` plus {@link BOTTOM_STATUS_TRAIL}
- * flush to the right edge. The label is tinted by `style.status`, the dashes by
- * `style.border`, so the two can track different theme colours.
+ * The incoming `line` is `width` visible columns of dashes, optionally with a
+ * scroll indicator. We keep its left `width - statusWidth` columns verbatim —
+ * ANSI-aware, so an existing scroll indicator survives — and append ` label `
+ * plus {@link BORDER_STATUS_TRAIL} flush to the right edge. The label is tinted
+ * by `style.status`, the dashes by `style.border`, so the two can track
+ * different theme colours.
  *
  * When the terminal is too narrow to leave {@link MIN_LEFT_FILL} border dashes,
  * the line is returned untouched so we never crowd out the frame.
  */
-export function applyBottomStatus(
+export function applyBorderStatus(
 	line: string,
 	width: number,
 	label: string,
-	style: BottomStatusStyle,
+	style: BorderStatusStyle,
 ): string {
 	const decorated = ` ${label} `;
-	const statusWidth = visibleWidth(decorated) + BOTTOM_STATUS_TRAIL.length;
+	const statusWidth = visibleWidth(decorated) + BORDER_STATUS_TRAIL.length;
 	const leftWidth = width - statusWidth;
 	if (leftWidth < MIN_LEFT_FILL) return line;
 
@@ -90,5 +104,5 @@ export function applyBottomStatus(
 
 	// The label and its trailing corner dashes both carry the status colour, so the
 	// right end of the border reads as one tinted run; only the left fill stays plain.
-	return left + style.status(decorated + BOTTOM_STATUS_TRAIL);
+	return left + style.status(decorated + BORDER_STATUS_TRAIL);
 }
