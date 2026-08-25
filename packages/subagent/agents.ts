@@ -124,3 +124,18 @@ export function formatAgentList(agents: AgentConfig[], maxItems: number): { text
 		remaining,
 	};
 }
+
+/** Build the current user-scope subagent roster for the parent LLM. */
+export function formatAvailableSubagents(agents: AgentConfig[]): string {
+	if (agents.length === 0) return "";
+
+	const entries = agents.map((agent) => `- \`${agent.name}\` - ${agent.description}`);
+	return [
+		"## Available Subagents",
+		"",
+		"Use the `subagent` tool to delegate work when an isolated context or specialist role is useful.",
+		"Do not call a subagent name that is not listed here.",
+		"",
+		...entries,
+	].join("\n");
+}

@@ -27,7 +27,7 @@ import {
 	withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
-import { type AgentConfig, type AgentScope, discoverAgents } from "./agents";
+import { type AgentConfig, type AgentScope, discoverAgents, formatAvailableSubagents } from "./agents";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -512,11 +512,20 @@ export function registerSubagent(pi: ExtensionAPI) {
 		);
 	});
 
+	pi.on("before_agent_start", (event, ctx) => {
+		const { agents } = discoverAgents(ctx.cwd, "user");
+		const roster = formatAvailableSubagents(agents);
+		if (!roster) return;
+
+		return { systemPrompt: `${event.systemPrompt}\n\n${roster}` };
+	});
+
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
 		description: [
 			"Delegate tasks to specialized subagents with isolated context.",
+			"Routing: use scout for codebase reconnaissance; planner for plans without changes; reviewer for reviewing changes without modifying files; worker for implementation and other uncategorized work.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
 			`Default agent scope is "user" (from ${path.join(getAgentDir(), "agents")}).`,
 			`To enable project-local agents in ${CONFIG_DIR_NAME}/agents, set agentScope: "both" (or "project").`,
