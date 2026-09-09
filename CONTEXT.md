@@ -4,6 +4,26 @@ A collection of personal pi extension packages. Each package under `packages/` e
 
 ## Language
 
+### Parts
+
+**Part**:
+One of the independently registrable units this collection contributes to pi — currently `header`, `footer`, `prompt-prefix`, `subagent` — each identified by its directory name under `packages/` and registered by `index.ts`.
+_Avoid_: "package" (pi's `packages` setting means npm/git-installed extensions), "module", "component" (parts are built from components), "plugin"
+
+**Part selection**:
+A project's choice of which parts load there, read from the project's `.pi/my-pi.json` (allow-list of part names). Always project-scope — there is no user-scope selection. No selection loads every part; an explicit empty selection loads none.
+_Avoid_: "package list", "feature flags", "config" alone (the file may grow beyond selection)
+
+### Skills
+
+**Global skills**:
+Skills discovered at user scope — `~/.pi/agent/skills`, `~/.agents/skills`, and user-installed packages — identified by `sourceInfo.scope === "user"`, not by directory. Distinct from project skills (`.pi/skills`, ancestor `.agents/skills`) and `--skill` paths (temporary scope).
+_Avoid_: "user skills" (fine informally — the concept is the scope, not the dirs), "core skills"
+
+**Ignored skill**:
+A **global skill** the current project's ignore policy (`ignoredSkills` in `.pi/my-pi.json`, matched by name) hides from the model's system prompt and the header's `Skills` section. Still loadable via explicit `/skill:name` — the policy silences the model's view, not the user's.
+_Avoid_: "blocked skill" (only `read` into its directory is refused; the skill is not uninstalled), "disabled skill" (collides with part disabling and `disable-model-invocation`)
+
 ### Prompt history
 
 **History entry**:
@@ -33,7 +53,7 @@ A markdown file (YAML frontmatter + a system-prompt body) that configures one su
 _Avoid_: "agent file", "prompt" (collides with prompt-templates and LLM turns)
 
 **Available agents**:
-The discoverable set of user-scope **agent definitions** — the list the `subagent` tool offers by default (its `agentScope: "user"` default) and the list the header renders as the `Subagents` section (names only, `showCount`). Project-scope agents are deliberately excluded from both by default; opting into `agentScope: "both"` surfaces them only inside a tool invocation, never in the header.
+The discoverable set of user-scope **agent definitions** — the list the `subagent` tool offers by default (its `agentScope: "user"` default) and the list the header renders as the `Subagents` section (names only, `showCount` — only while the subagent part is selected; see **Part selection**). Project-scope agents are deliberately excluded from both by default; opting into `agentScope: "both"` surfaces them only inside a tool invocation, never in the header.
 _Avoid_: "agent list" (use only informally), "roster"
 
 **Nesting depth**:

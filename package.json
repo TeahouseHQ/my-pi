@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest run packages/",
+    "test": "vitest run",
     "bake:sprite": "node scripts/bake-sprite.mjs",
     "decode:chart": "node scripts/chart-to-sprite.mjs",
     "lint": "eslint .",

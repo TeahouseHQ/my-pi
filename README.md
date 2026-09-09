@@ -1,8 +1,8 @@
 # my-pi
 
-A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customization packages. Each package under `packages/` is a self-contained feature that plugs into Pi's extension API.
+A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customization parts. Each part under `packages/` is a self-contained feature that plugs into Pi's extension API.
 
-## Packages
+## Parts
 
 | Package                                      | Description                                                                               |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
@@ -10,7 +10,46 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 | [**header**](packages/header/)               | Replaces the built-in startup header (Pi version + keybinding hints) with a custom sprite |
 | [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron plus thinking/history status to the input prompt                     |
 
-> Add new packages by creating a folder under `packages/` and registering it in `index.ts`.
+> Add a new part by creating a folder under `packages/`, adding it to `PART_NAMES`, and registering it in `index.ts`.
+
+## Part selection
+
+By default every part loads in every project. A project can narrow that with an
+allow-list in `<project>/.pi/my-pi.json`:
+
+```json
+{ "parts": ["footer"] }
+```
+
+- A missing file, a missing `parts` key, or an unreadable file selects **all
+  parts**. Malformed JSON and unknown part names never block startup — they
+  fall back and surface as a one-time warning when a UI is available.
+- `"parts": []` is valid and loads **nothing** in that project.
+- With the `subagent` part disabled, the header omits its `Subagents` section
+  too — it only advertises agents that can actually be spawned.
+- The selection is read once at startup from the launch directory and applies
+  to every run mode; see [ADR 0014](docs/adr/0014-load-time-part-selection-without-trust-check.md)
+  for the load-time (no trust check) trade-off.
+
+## Ignoring global skills
+
+A project can hide **global skills** (user-scope: `~/.pi/agent/skills`,
+`~/.agents/skills`, and user-installed packages) by name in `.pi/my-pi.json`:
+
+```json
+{ "ignoredSkills": ["some-skill", "another-skill"] }
+```
+
+Ignored skills are removed from the model's system prompt and the header's
+`Skills` section, and `read` calls into their directories are refused. They
+remain available to you via `/skill:name` — the policy silences the model's
+view, not the user's.
+
+- Matching is **by skill name** and applies only to user-scope skills;
+  project skills and `--skill` paths are never eligible.
+- A malformed `ignoredSkills` never blocks startup: it is ignored with a
+  one-time warning (see ADR 0014's error policy).
+- `bash` is not gated — this is prompt-level policy, not an unload.
 
 ## Footer
 
@@ -115,8 +154,13 @@ npm run check
 ## Project structure
 
 ```
-index.ts                Orchestrator — activates all packages
+index.ts                Orchestrator — registers the parts the project selects
+config.ts                Project config — resolves .pi/my-pi.json: part selection + ignoredSkills (ADR 0014)
 packages/
+├── ignore-skills/
+│   ├── index.ts        Exports registerIgnoreSkills(pi) — policy-activated, not a part
+│   ├── lib.ts          Pure, testable functions
+│   └── lib.test.ts     Vitest tests
 ├── footer/
 │   ├── index.ts        Exports registerFooter(pi)
 │   ├── lib.ts          Pure, testable functions
@@ -124,4 +168,4 @@ packages/
 └── …                   Future packages go here
 ```
 
-Each package exports a registration function with the signature `(pi: ExtensionAPI) => void`. To add a new customization, create a folder under `packages/`, add one import + call to root `index.ts`, and you're done.
+Each part exports a registration function with the signature `(pi: ExtensionAPI) => void`. To add a new part, create a folder under `packages/`, add it to `PART_NAMES` in `config.ts` plus its entry in `index.ts`, and you're done.
