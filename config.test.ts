@@ -23,7 +23,7 @@ function loadUnreadable(): MyPiConfig {
 	return loadConfig(dir);
 }
 
-describe("parseConfig — parts", () => {
+describe("parseConfig", () => {
 	it("treats every part as the canonical 'all' set", () => {
 		expect(PART_NAMES).toEqual(["header", "footer", "prompt-prefix", "subagent"]);
 	});
@@ -82,63 +82,6 @@ describe("parseConfig — parts", () => {
 	});
 });
 
-describe("parseConfig — ignoredSkills", () => {
-	it("ignores nothing when the key is absent", () => {
-		const config = parseConfig("{}");
-		expect(config.ignoredSkills).toEqual(NONE);
-		expect(config.warning).toBeUndefined();
-	});
-
-	it("treats an explicit false as a silent no-op", () => {
-		const config = parseConfig(JSON.stringify({ ignoredSkills: false }));
-		expect(config.ignoredSkills).toEqual(NONE);
-		expect(config.warning).toBeUndefined();
-	});
-
-	it("accepts an empty list", () => {
-		const config = parseConfig(JSON.stringify({ ignoredSkills: [] }));
-		expect(config.ignoredSkills).toEqual(NONE);
-		expect(config.warning).toBeUndefined();
-	});
-
-	it("honors a list of skill names, deduplicated", () => {
-		const config = parseConfig(JSON.stringify({ ignoredSkills: ["grilling", "prototype", "grilling"] }));
-		expect(config.ignoredSkills).toEqual(new Set(["grilling", "prototype"]));
-		expect(config.warning).toBeUndefined();
-	});
-
-	it("does not validate names — any string is a potential skill name", () => {
-		const config = parseConfig(JSON.stringify({ ignoredSkills: ["not-a-real-skill"] }));
-		expect(config.ignoredSkills).toEqual(new Set(["not-a-real-skill"]));
-		expect(config.warning).toBeUndefined();
-	});
-
-	it("warns on non-list shapes, including the boolean shorthand", () => {
-		for (const ignoredSkills of [true, "grilling", { grilling: true }, [42], [null]]) {
-			const config = parseConfig(JSON.stringify({ ignoredSkills }));
-			expect(config.ignoredSkills).toEqual(NONE);
-			expect(config.warning).toMatch(/must be an array of skill names/);
-		}
-	});
-});
-
-describe("parseConfig — combined keys", () => {
-	it("fails the two keys independently", () => {
-		const config = parseConfig(JSON.stringify({ parts: "nope", ignoredSkills: "also-nope" }));
-		expect(config.parts).toEqual(ALL);
-		expect(config.ignoredSkills).toEqual(NONE);
-		expect(config.warning).toMatch(/must be an array of part names/);
-		expect(config.warning).toMatch(/must be an array of skill names/);
-	});
-
-	it("honors a valid key next to a malformed one", () => {
-		const config = parseConfig(JSON.stringify({ parts: ["footer"], ignoredSkills: true }));
-		expect(config.parts).toEqual(new Set(["footer"]));
-		expect(config.ignoredSkills).toEqual(NONE);
-		expect(config.warning).toMatch(/skill names/);
-	});
-});
-
 describe("resolveConfig", () => {
 	it("resolves once per process: every caller shares one config", () => {
 		expect(resolveConfig()).toBe(resolveConfig());
@@ -146,26 +89,21 @@ describe("resolveConfig", () => {
 });
 
 describe("loadConfig", () => {
-	it("uses defaults when the config file does not exist", () => {
+	it("selects all parts when the config file does not exist", () => {
 		const config = loadFor();
 		expect(config.parts).toEqual(ALL);
-		expect(config.ignoredSkills).toEqual(NONE);
 		expect(config.warning).toBeUndefined();
 	});
 
-	it("honors both keys from the project config", () => {
-		const config = loadFor(JSON.stringify({ parts: ["footer"], ignoredSkills: ["grilling"] }));
-		expect(config.parts).toEqual(new Set(["footer"]));
-		expect(config.ignoredSkills).toEqual(new Set(["grilling"]));
-		expect(config.warning).toBeUndefined();
+	it("honors a selection in the project config", () => {
+		expect(loadFor(JSON.stringify({ parts: ["footer"] }))).toEqual({ parts: new Set(["footer"]) });
 	});
 
-	it("treats an unreadable config as malformed: defaults + warning", () => {
+	it("treats an unreadable config as malformed: all parts + warning", () => {
 		// A directory at the config path makes readFileSync fail with EISDIR,
 		// deterministically (unlike permission bits, which root would bypass).
 		const config = loadUnreadable();
 		expect(config.parts).toEqual(ALL);
-		expect(config.ignoredSkills).toEqual(NONE);
 		expect(config.warning).toMatch(/could not read/);
 	});
 });

@@ -14,7 +14,6 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { PART_NAMES, resolveConfig, type PartName } from "./config";
 import { registerFooter } from "./packages/footer";
 import { registerHeader } from "./packages/header";
-import { registerIgnoreSkills } from "./packages/ignore-skills";
 import { registerPromptPrefix } from "./packages/prompt-prefix";
 import { registerSubagent } from "./packages/subagent";
 
@@ -44,8 +43,4 @@ export default function (pi: ExtensionAPI) {
 	for (const name of PART_NAMES) {
 		if (parts.has(name)) register[name](pi);
 	}
-
-	// Not a part: the skill-ignore policy activates itself only when the
-	// project's `ignoredSkills` list is non-empty.
-	registerIgnoreSkills(pi);
 }

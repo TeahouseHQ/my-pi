@@ -31,26 +31,6 @@ allow-list in `<project>/.pi/my-pi.json`:
   to every run mode; see [ADR 0014](docs/adr/0014-load-time-part-selection-without-trust-check.md)
   for the load-time (no trust check) trade-off.
 
-## Ignoring global skills
-
-A project can hide **global skills** (user-scope: `~/.pi/agent/skills`,
-`~/.agents/skills`, and user-installed packages) by name in `.pi/my-pi.json`:
-
-```json
-{ "ignoredSkills": ["some-skill", "another-skill"] }
-```
-
-Ignored skills are removed from the model's system prompt and the header's
-`Skills` section, and `read` calls into their directories are refused. They
-remain available to you via `/skill:name` — the policy silences the model's
-view, not the user's.
-
-- Matching is **by skill name** and applies only to user-scope skills;
-  project skills and `--skill` paths are never eligible.
-- A malformed `ignoredSkills` never blocks startup: it is ignored with a
-  one-time warning (see ADR 0014's error policy).
-- `bash` is not gated — this is prompt-level policy, not an unload.
-
 ## Footer
 
 Replaces the default footer with a single line showing:
@@ -155,12 +135,8 @@ npm run check
 
 ```
 index.ts                Orchestrator — registers the parts the project selects
-config.ts                Project config — resolves .pi/my-pi.json: part selection + ignoredSkills (ADR 0014)
+config.ts                Part selection — resolves <project>/.pi/my-pi.json (ADR 0014)
 packages/
-├── ignore-skills/
-│   ├── index.ts        Exports registerIgnoreSkills(pi) — policy-activated, not a part
-│   ├── lib.ts          Pure, testable functions
-│   └── lib.test.ts     Vitest tests
 ├── footer/
 │   ├── index.ts        Exports registerFooter(pi)
 │   ├── lib.ts          Pure, testable functions

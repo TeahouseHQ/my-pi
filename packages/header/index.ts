@@ -27,7 +27,6 @@ import {
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
 import { resolveConfig } from "../../config";
-import { isIgnoredSkill } from "../ignore-skills/lib";
 import { discoverAgents } from "../subagent/agents";
 import { SPRITE } from "./sprite";
 import {
@@ -70,16 +69,14 @@ async function loadResourceSections(cwd: string): Promise<ResourceSection[]> {
 			noPromptTemplates: true,
 		});
 		await loader.reload();
-		// The Subagents section advertises what can actually be spawned, and the
-		// Skills section what the model can actually see, so both follow the
-		// project config: with the subagent part disabled the section is omitted
-		// (empty sections are dropped), and ignored global skills are filtered
-		// from Skills by the same predicate the prompt surgery uses.
-		const { parts, ignoredSkills } = resolveConfig();
+		// The Subagents section advertises what can actually be spawned, so it
+		// follows the part selection: with the subagent part disabled the tool
+		// is absent and the section is omitted (empty sections are dropped).
+		const { parts } = resolveConfig();
 		return buildResourceSections({
 			cwd,
 			contextFiles: loader.getAgentsFiles().agentsFiles,
-			skills: loader.getSkills().skills.filter((skill) => !isIgnoredSkill(skill, ignoredSkills)),
+			skills: loader.getSkills().skills,
 			extensions: loader.getExtensions().extensions,
 			agents: parts.has("subagent")
 				? discoverAgents(cwd, "user").agents.map((agent) => ({ name: agent.name }))
