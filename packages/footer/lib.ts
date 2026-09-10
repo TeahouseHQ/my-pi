@@ -177,3 +177,91 @@ export function countTokens(branch: BranchEntry[]): { input: number; output: num
 	}
 	return { input, output };
 }
+
+// ── Telegram connect status ────────────────────────────────────────────────
+
+// eslint-disable-next-line no-control-regex -- the point is to strip ANSI escape sequences
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+/**
+ * Words in pi-telegram's status-bar text that mean the session is NOT
+ * connected. Healthy states (connected, leader, follower, active, …) are
+ * everything else, so classification is negative-match only.
+ */
+const TELEGRAM_DOWN_STATES = new Set([
+	"not configured",
+	"awaiting pairing",
+	"electing",
+	"reconnecting",
+	"disconnected",
+	"error",
+]);
+
+/**
+ * Every state word the bar can end with, in test order. The bar text is
+ * `<label> <state>[ +N]`; endsWith matching must try longer/overlapping
+ * words first, so "disconnected" precedes "connected". Two-word states go
+ * first for the same reason.
+ */
+const TELEGRAM_STATES = [
+	"not configured",
+	"awaiting pairing",
+	"disconnected",
+	"reconnecting",
+	"electing",
+	"connected",
+	"leader",
+	"follower",
+	"active",
+	"processing",
+	"dispatching",
+	"queued",
+	"model",
+	"error",
+];
+
+export interface TelegramFooterStatus {
+	/** True when the session's Telegram transport is up. */
+	connected: boolean;
+	/**
+	 * Thread display name of this instance (e.g. "Navigator"), already the
+	 * target-aware title pi-telegram projects for terminal status. Undefined
+	 * in classic mode, for unnamed instances, and when disconnected (the bar
+	 * hardcodes the generic "telegram" label there).
+	 */
+	name?: string;
+}
+
+/**
+ * Parse pi-telegram's footer status (the value it sets via
+ * `ctx.ui.setStatus("telegram", …)`, read back through
+ * `footerData.getExtensionStatuses()`) into a connect flag plus the
+ * instance's thread display name.
+ *
+ * The bar renders the thread name as the label for named instances and
+ * "telegram" otherwise, followed by a state word and an optional ` +N`
+ * queued count — e.g. `Navigator connected +2`, `telegram disconnected`.
+ * Returns `undefined` when the telegram extension has not set any status
+ * (not installed) — the footer omits the segment in that case.
+ */
+export function parseTelegramFooterStatus(
+	raw: string | undefined,
+): TelegramFooterStatus | undefined {
+	if (!raw) return undefined;
+	const plain = raw.replace(ANSI_RE, "").trim();
+	if (!plain) return undefined;
+	// Drop the trailing queued count (" +2") so the state word is last.
+	const withoutQueue = plain.replace(/\s\+\d+$/, "");
+	const lower = withoutQueue.toLowerCase();
+	for (const state of TELEGRAM_STATES) {
+		if (!lower.endsWith(state)) continue;
+		const label = withoutQueue.slice(0, withoutQueue.length - state.length).trim();
+		return {
+			connected: !TELEGRAM_DOWN_STATES.has(state),
+			name: label && label.toLowerCase() !== "telegram" ? label : undefined,
+		};
+	}
+	// Unknown shape (future extension version): assume up rather than
+	// flicker the segment to offline, but surface no name.
+	return { connected: true };
+}

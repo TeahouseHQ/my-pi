@@ -7,6 +7,7 @@ import {
 	parseGitPorcelainV2,
 	isLinkedWorktree,
 	parseStashCount,
+	parseTelegramFooterStatus,
 } from "./lib";
 
 // ── fmtTokens ──────────────────────────────────────────────────────────────
@@ -282,5 +283,103 @@ describe("countTokens", () => {
 	it("treats missing cache fields as zero", () => {
 		const branch = [{ type: "message" as const, message: { role: "assistant", usage: { input: 10, output: 20 } } }];
 		expect(countTokens(branch)).toEqual({ input: 10, output: 20 });
+	});
+});
+
+// ── parseTelegramFooterStatus ──────────────────────────────────────────────
+
+describe("parseTelegramFooterStatus", () => {
+	it("returns undefined when no status is set", () => {
+		expect(parseTelegramFooterStatus(undefined)).toBeUndefined();
+		expect(parseTelegramFooterStatus("")).toBeUndefined();
+	});
+
+	it("reports connected without a name for generic labels", () => {
+		// Classic mode, unnamed instances, and disconnected all use the
+		// generic "telegram" label.
+		expect(parseTelegramFooterStatus("telegram connected")).toEqual({
+			connected: true,
+		});
+		expect(parseTelegramFooterStatus("telegram disconnected")).toEqual({
+			connected: false,
+		});
+	});
+
+	it("extracts the thread display name when connected", () => {
+		expect(parseTelegramFooterStatus("Navigator connected")).toEqual({
+			connected: true,
+			name: "Navigator",
+		});
+		expect(parseTelegramFooterStatus("Navigator leader")).toEqual({
+			connected: true,
+			name: "Navigator",
+		});
+		expect(parseTelegramFooterStatus("extensions_a follower")).toEqual({
+			connected: true,
+			name: "extensions_a",
+		});
+		// Names preserve their original casing.
+		expect(parseTelegramFooterStatus("My Agent active")).toEqual({
+			connected: true,
+			name: "My Agent",
+		});
+	});
+
+	it("drops the queued-count suffix before parsing", () => {
+		expect(parseTelegramFooterStatus("Navigator connected +2")).toEqual({
+			connected: true,
+			name: "Navigator",
+		});
+	});
+
+	it("reports connected for processing states", () => {
+		expect(parseTelegramFooterStatus("Navigator processing")).toEqual({
+			connected: true,
+			name: "Navigator",
+		});
+		expect(parseTelegramFooterStatus("Navigator dispatching")).toEqual({
+			connected: true,
+			name: "Navigator",
+		});
+	});
+
+	it("reports not connected for down states", () => {
+		for (const text of [
+			"telegram not configured",
+			"telegram awaiting pairing",
+			"telegram electing",
+			"telegram reconnecting",
+			"telegram error",
+		]) {
+			expect(parseTelegramFooterStatus(text)).toEqual({ connected: false });
+		}
+	});
+
+	it("sees through ANSI color codes", () => {
+		const themed = "\x1b[36mNavigator\x1b[39m \x1b[32mconnected\x1b[39m";
+		expect(parseTelegramFooterStatus(themed)).toEqual({
+			connected: true,
+			name: "Navigator",
+		});
+		const themedDown = "\x1b[36mtelegram\x1b[39m \x1b[31merror\x1b[39m";
+		expect(parseTelegramFooterStatus(themedDown)).toEqual({
+			connected: false,
+		});
+	});
+
+	it("does not confuse 'disconnected' with 'connected'", () => {
+		// Real bars hardcode the "telegram" label when disconnected; if a
+		// name ever did appear, keeping it is harmless — the footer renders
+		// only "offline" when not connected.
+		expect(parseTelegramFooterStatus("Navigator disconnected")).toEqual({
+			connected: false,
+			name: "Navigator",
+		});
+	});
+
+	it("assumes up for unrecognized text", () => {
+		expect(parseTelegramFooterStatus("something else")).toEqual({
+			connected: true,
+		});
 	});
 });

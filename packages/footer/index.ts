@@ -3,8 +3,14 @@
  *
  * Replaces the default footer with a single line, each widget prefixed with a
  * Nerd Font glyph (requires a Nerd Font-patched terminal font):
- *    cwd |  branch ↑N ↓N |  +N ~N ?N ✕N ⚑N |  [bar] |  ⇡in ⇣out |  model[provider]
+ *    cwd |  branch ↑N ↓N |  +N ~N ?N ✕N ⚑N |  [bar] |  ⇡in ⇣out |  model[provider] |  telegram connected
  * All segments joined by " | ".
+ *
+ * The telegram segment only appears when the @llblab/pi-telegram extension
+ * has set a status (i.e. it is installed); it reads that extension's
+ * status-bar text back through footerData.getExtensionStatuses() and shows
+ * the thread display name while connected ("connected" if the instance is
+ * unnamed), or a muted "offline" — see parseTelegramFooterStatus in lib.ts.
  *
  * The thinking level is intentionally absent here — it lives on the prompt's
  * bottom border instead (see the prompt-prefix package).
@@ -20,6 +26,7 @@ import {
 	isLinkedWorktree,
 	parseGitPorcelainV2,
 	parseStashCount,
+	parseTelegramFooterStatus,
 	type GitStatus,
 } from "./lib";
 
@@ -38,6 +45,7 @@ const ICON = {
 	context: "\uf0e4", // nf-fa-dashboard (gauge)
 	tokens: "\uf0ec", // nf-fa-exchange
 	model: "\uf2db", // nf-fa-microchip
+	telegram: "\uf2c6", // nf-fa-telegram
 } as const;
 
 let cachedGitStatus: GitStatus = { ahead: 0, behind: 0, staged: 0, modified: 0, untracked: 0, conflicted: 0 };
@@ -167,6 +175,25 @@ export function registerFooter(pi: ExtensionAPI) {
 						theme.fg("toolTitle", tokenStr),
 						theme.fg("accent", `${ICON.model} ${modelStr}`),
 					);
+
+					// --- Telegram connect status (only when pi-telegram is active) ---
+					// Connected: the instance's thread display name, or "connected"
+					// when unnamed/classic. Down states collapse to "offline".
+					const telegramStatus = parseTelegramFooterStatus(
+						footerData.getExtensionStatuses().get("telegram"),
+					);
+					if (telegramStatus) {
+						const label = telegramStatus.connected
+							? (telegramStatus.name ?? "connected")
+							: "offline";
+						segments.push(
+							theme.fg(
+								telegramStatus.connected ? "success" : "muted",
+								`${ICON.telegram} ${label}`,
+							),
+						);
+					}
+
 					const line = segments.join(theme.fg("dim", SEP));
 					return [truncateToWidth(line, width)];
 				},
