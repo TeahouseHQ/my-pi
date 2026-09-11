@@ -7,8 +7,12 @@ A collection of personal pi extension packages. Each package under `packages/` e
 ### Parts
 
 **Part**:
-One of the independently registrable units this collection contributes to pi — currently `header`, `footer`, `prompt-prefix`, `subagent` — each identified by its directory name under `packages/` and registered by `index.ts`.
+One of the independently registrable units this collection contributes to pi — currently `header`, `footer`, `prompt-prefix`, `subagent`, `telegram-new-session` — each identified by its directory name under `packages/` and registered by `index.ts`.
 _Avoid_: "package" (pi's `packages` setting means npm/git-installed extensions), "module", "component" (parts are built from components), "plugin"
+
+**Internal dispatch command**:
+The `tg-new-session` pi command that the `telegram-new-session` part registers lazily, one dispatch at a time, so the Telegram `/new` command can reach `ctx.newSession()` without adding a TUI-visible command (ADR 0015). Dispatched via `pi.sendUserMessage(..., { expandPromptTemplates: true })`.
+_Avoid_: "slash command" (implies TUI/Telegram visibility), "/session-new" (the superseded name from the first design)
 
 **Part selection**:
 A project's choice of which parts load there, read from the project's `.pi/my-pi.json` (allow-list of part names). Always project-scope — there is no user-scope selection. No selection loads every part; an explicit empty selection loads none.

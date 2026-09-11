@@ -25,7 +25,13 @@ function loadUnreadable(): MyPiConfig {
 
 describe("parseConfig", () => {
 	it("treats every part as the canonical 'all' set", () => {
-		expect(PART_NAMES).toEqual(["header", "footer", "prompt-prefix", "subagent"]);
+		expect(PART_NAMES).toEqual([
+			"header",
+			"footer",
+			"prompt-prefix",
+			"subagent",
+			"telegram-new-session",
+		]);
 	});
 
 	it("selects all parts when the `parts` key is absent", () => {

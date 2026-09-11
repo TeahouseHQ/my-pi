@@ -17,7 +17,13 @@ import { join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 
 /** Every part this extension can register, named after its `packages/` directory. */
-export const PART_NAMES = ["header", "footer", "prompt-prefix", "subagent"] as const;
+export const PART_NAMES = [
+	"header",
+	"footer",
+	"prompt-prefix",
+	"subagent",
+	"telegram-new-session",
+] as const;
 
 export type PartName = (typeof PART_NAMES)[number];
 

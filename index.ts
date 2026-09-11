@@ -16,6 +16,7 @@ import { registerFooter } from "./packages/footer";
 import { registerHeader } from "./packages/header";
 import { registerPromptPrefix } from "./packages/prompt-prefix";
 import { registerSubagent } from "./packages/subagent";
+import { registerTelegramNewSession } from "./packages/telegram-new-session";
 
 export default function (pi: ExtensionAPI) {
 	const { parts, warning } = resolveConfig();
@@ -39,6 +40,7 @@ export default function (pi: ExtensionAPI) {
 		footer: registerFooter,
 		"prompt-prefix": registerPromptPrefix,
 		subagent: registerSubagent,
+		"telegram-new-session": registerTelegramNewSession,
 	};
 	for (const name of PART_NAMES) {
 		if (parts.has(name)) register[name](pi);
