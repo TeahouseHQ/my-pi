@@ -2,3 +2,6 @@
 docs/plans
 node_modules/
 packages/header/assets/*.png
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
