@@ -44,7 +44,8 @@ describe("thinkingLabel", () => {
 		expect(thinkingLabel("low")).toBe("low");
 		expect(thinkingLabel("medium")).toBe("med");
 		expect(thinkingLabel("high")).toBe("high");
-		expect(thinkingLabel("xhigh")).toBe("max");
+		expect(thinkingLabel("xhigh")).toBe("xhigh");
+		expect(thinkingLabel("max")).toBe("max");
 	});
 
 	it("passes through unknown levels", () => {

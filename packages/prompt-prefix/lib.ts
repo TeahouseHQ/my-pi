@@ -15,7 +15,8 @@ const THINKING_LABELS: Record<string, string> = {
 	low: "low",
 	medium: "med",
 	high: "high",
-	xhigh: "max",
+	xhigh: "xhigh",
+	max: "max",
 };
 
 export { THINKING_LABELS };
