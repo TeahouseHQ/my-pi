@@ -20,6 +20,7 @@ import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 export const PART_NAMES = [
 	"header",
 	"footer",
+	"context-view",
 	"prompt-prefix",
 	"subagent",
 	"telegram-new-session",

@@ -12,6 +12,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { PART_NAMES, resolveConfig, type PartName } from "./config";
+import { registerContextView } from "./packages/context-view";
 import { registerFooter } from "./packages/footer";
 import { registerHeader } from "./packages/header";
 import { registerPromptPrefix } from "./packages/prompt-prefix";
@@ -38,6 +39,7 @@ export default function (pi: ExtensionAPI) {
 	const register: Record<PartName, (pi: ExtensionAPI) => void> = {
 		header: registerHeader,
 		footer: registerFooter,
+		"context-view": registerContextView,
 		"prompt-prefix": registerPromptPrefix,
 		subagent: registerSubagent,
 		"telegram-new-session": registerTelegramNewSession,

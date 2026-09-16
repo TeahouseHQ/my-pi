@@ -7,7 +7,7 @@ A collection of personal pi extension packages. Each package under `packages/` e
 ### Parts
 
 **Part**:
-One of the independently registrable units this collection contributes to pi — currently `header`, `footer`, `prompt-prefix`, `subagent`, `telegram-new-session` — each identified by its directory name under `packages/` and registered by `index.ts`.
+One of the independently registrable units this collection contributes to pi — currently `header`, `footer`, `context-view`, `prompt-prefix`, `subagent`, `telegram-new-session` — each identified by its directory name under `packages/` and registered by `index.ts`.
 _Avoid_: "package" (pi's `packages` setting means npm/git-installed extensions), "module", "component" (parts are built from components), "plugin"
 
 **Internal dispatch command**:
@@ -53,6 +53,28 @@ _Avoid_: "agent list" (use only informally), "roster"
 **Nesting depth**:
 How many `pi` processes deep a subagent invocation is. The top-level conversation is depth 0; each spawned subagent is one deeper. Capped at `MAX_SUBAGENT_DEPTH` (2, hardcoded in `packages/subagent/index.ts`): before spawning, a process reads its own inherited `PI_SUBAGENT_DEPTH` env var (default 0), and if `depth + 1` would exceed the cap it refuses **parent-side — the too-deep subprocess never starts**. The refusal surfaces as a normal tool error (`isError: true`, via `errorMessage`) across all three modes, identical in shape to the unknown-agent pre-spawn refusal. The parent injects `PI_SUBAGENT_DEPTH = depth + 1` into the child's spawn env (`spawn` inherits it into the child's `process.env`); the depth is otherwise invisible to the model — it appears only in the limit-reached error message. Malformed or absent env → depth 0.
 _Avoid_: "recursion level", "subagent level" (no codebase precedent), "depth limit" (that's the cap value, not the per-invocation concept)
+
+### Context view
+
+**Context view**:
+The full-screen read-only takeover rendered by the `context-view` part when the user runs `/context`: exactly what the LLM currently receives, as collapsible **context sections** — the **system prompt** (decomposed into the structured inputs pi built it from), **tool schemas**, and **messages** — each with a **token estimate**. Rebuilt as a **snapshot** at open time. Esc/q exits back to the unchanged editor. Outside the TUI it degrades to a compact `notify()` summary; it never injects anything into the context it measures.
+_Avoid_: "context browser", "inspector", "two-zone" (the loaded-but-unsent zone was considered and dropped — the view is a meter for current context only)
+
+**Context section**:
+One collapsible block of the context view: `System prompt`, `Tool schemas`, or `Messages`, in dispatch order. Each collapsed to a summary line (name, token estimate, preview); expanded for content. A section's estimate is the sum of its entries (per input, per tool, per message).
+_Avoid_: "tab", "pane", "zone"
+
+**Snapshot**:
+The data one opening of the context view renders: the system prompt plus branch messages reassembled from the live session — "what would be sent next turn", never "what was sent last turn". Labeled a reconstruction; if another extension rewrites messages pre-dispatch, the snapshot may differ from the exact provider payload.
+_Avoid_: "capture" (implies the exact last-sent payload), "cache"
+
+**Token estimate**:
+The chars÷4 approximation (`estimateTokens`) shown per section/entry, labeled as an estimate, with the view total reconciled against the provider-reported context usage (`getContextUsage`).
+_Avoid_: "token count" unqualified (implies tokenizer-exact output)
+
+**System prompt**:
+The single composed prompt pi assembles per session — base/custom instructions, context files (AGENTS.md etc., contents included), the skills list, guidelines, tool snippets, appended fragments. Exactly one exists per session; the context view decomposes it using the structured inputs pi used to build it. Its skills subsection flags skills that are loaded but withheld from the prompt (`disableModelInvocation`).
+_Avoid_: "system prompts" (plural — there is exactly one)
 
 ### Header
 

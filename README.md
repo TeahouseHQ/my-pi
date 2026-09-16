@@ -6,6 +6,7 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 
 | Package                                      | Description                                                                               |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [**context-view**](packages/context-view/)  | `/context` full-screen read-only meter of the current LLM context (system prompt, tool schemas, messages) |
 | [**footer**](packages/footer/)               | Compact single-line status bar replacing the default footer                               |
 | [**header**](packages/header/)               | Replaces the built-in startup header (Pi version + keybinding hints) with a custom sprite |
 | [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron plus thinking/history status to the input prompt                     |

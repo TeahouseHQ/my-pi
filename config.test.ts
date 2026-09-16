@@ -28,6 +28,7 @@ describe("parseConfig", () => {
 		expect(PART_NAMES).toEqual([
 			"header",
 			"footer",
+			"context-view",
 			"prompt-prefix",
 			"subagent",
 			"telegram-new-session",
