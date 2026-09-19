@@ -15,6 +15,7 @@ import { PART_NAMES, resolveConfig, type PartName } from "./config";
 import { registerContextView } from "./packages/context-view";
 import { registerFooter } from "./packages/footer";
 import { registerHeader } from "./packages/header";
+import { registerOutputStyle } from "./packages/output-style";
 import { registerPromptPrefix } from "./packages/prompt-prefix";
 import { registerSubagent } from "./packages/subagent";
 import { registerTelegramNewSession } from "./packages/telegram-new-session";
@@ -43,6 +44,7 @@ export default function (pi: ExtensionAPI) {
 		"prompt-prefix": registerPromptPrefix,
 		subagent: registerSubagent,
 		"telegram-new-session": registerTelegramNewSession,
+		"output-style": registerOutputStyle,
 	};
 	for (const name of PART_NAMES) {
 		if (parts.has(name)) register[name](pi);

@@ -7,7 +7,7 @@ A collection of personal pi extension packages. Each package under `packages/` e
 ### Parts
 
 **Part**:
-One of the independently registrable units this collection contributes to pi — currently `header`, `footer`, `context-view`, `prompt-prefix`, `subagent`, `telegram-new-session` — each identified by its directory name under `packages/` and registered by `index.ts`.
+One of the independently registrable units this collection contributes to pi — currently `header`, `footer`, `context-view`, `prompt-prefix`, `subagent`, `telegram-new-session`, `output-style` — each identified by its directory name under `packages/` and registered by `index.ts`.
 _Avoid_: "package" (pi's `packages` setting means npm/git-installed extensions), "module", "component" (parts are built from components), "plugin"
 
 **Internal dispatch command**:
@@ -65,7 +65,7 @@ One collapsible block of the context view: `System prompt`, `Tool schemas`, or `
 _Avoid_: "tab", "pane", "zone"
 
 **Snapshot**:
-The data one opening of the context view renders: the system prompt plus branch messages reassembled from the live session — "what would be sent next turn", never "what was sent last turn". Labeled a reconstruction; if another extension rewrites messages pre-dispatch, the snapshot may differ from the exact provider payload.
+The data one opening of the context view renders: the system prompt plus branch messages reassembled from the live session — "what would be sent next turn", never "what was sent last turn". Labeled a reconstruction; if another extension rewrites messages pre-dispatch, the snapshot may differ from the exact provider payload. Dispatch-time changes are excluded: `before_agent_start` prompt suffixes (e.g. the output-style section) happen per turn, after the view's system prompt is read, so an active output style does not appear in the snapshot.
 _Avoid_: "capture" (implies the exact last-sent payload), "cache"
 
 **Token estimate**:
@@ -141,3 +141,21 @@ _Avoid_: "axis-label strips" (the baker-era term for the same thing; here they a
 **Palette snap**:
 The `decode:chart` colour rule (ADR 0010, superseding ADR 0009's exact-match palette *check*): the legend swatches ∪ {white} are the canonical palette — white is implicit because the white swatch is unsamplable against the paper — and every stamped cell snaps to its nearest entry, shipping the swatch colour rather than the (possibly noisy) cell sample. A cell farther than the snap cap from every entry aborts the decode; on a lossless chart every snap distance is 0. Colours only; the legend's counts are never parsed (no OCR) — the tool prints its own per-colour counts for manual comparison against the legend.
 _Avoid_: "palette check" (the retired exact-match rule), "validation" alone (too broad), "count check" (explicitly not done), "quantisation" (cells snap to the author's palette, not a computed one)
+
+### Output style
+
+**Output style**:
+Named guidance the `output-style` part appends to the system prompt on **every** agent turn (ADR 0016), steering the *form* of responses — never the task, tool permissions, or repository instructions. A model nudge, not enforcement. Distinct from a **skill** (invoked on demand, per-turn) and from a system-prompt prefix baked at build time.
+_Avoid_: "persona" (implies identity, not response form), "tone" (too narrow — styles also govern structure), "style plugin"
+
+**Style ID**:
+The lowercase-kebab-case folder name that identifies a style — also the settings value and the `/output-style` argument. Reserved: `default` (no custom guidance). Renaming a folder changes the ID, orphaning any selection that pointed at the old name.
+_Avoid_: "style name" (the frontmatter has no name field; the ID is the folder), "slug"
+
+**Style definition**:
+A **style folder** containing a `STYLE.md`: optional YAML frontmatter (`description`) plus a Markdown body that is the instruction text. Lives in the bundled `packages/output-style/styles/`, `~/.pi/agent/output-styles/` (global), or `<cwd>/.pi/output-styles/` (project, trusted projects only). Whole definitions merge by ID, bundled < global < project; invalid folders are skipped with warnings and never block startup.
+_Avoid_: "style file" (the unit is the folder; `STYLE.md` is one file inside), "template"
+
+**Active output style**:
+The single `outputStyle` key in pi's settings JSON, at global or project scope — project overrides global; project settings are read only when trusted. Missing, empty, or `"default"` means no guidance, and `before_agent_start` returns no result so prompts stay byte-for-byte unchanged. Config-driven, never session-scoped: the selection survives restarts, `/new`, `/resume`, and `/fork`, and a style whose folder vanished falls back to `default` with a warning instead of being auto-rewritten.
+_Avoid_: "current style" (ambiguous about scope), "selected style" (fine informally), "session style" (deliberately wrong — it is not session state)

@@ -9,6 +9,7 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 | [**context-view**](packages/context-view/)  | `/context` full-screen read-only meter of the current LLM context (system prompt, tool schemas, messages) |
 | [**footer**](packages/footer/)               | Compact single-line status bar replacing the default footer                               |
 | [**header**](packages/header/)               | Replaces the built-in startup header (Pi version + keybinding hints) with a custom sprite |
+| [**output-style**](packages/output-style/)  | `/output-style` picks a response style injected into the system prompt on every turn        |
 | [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron plus thinking/history status to the input prompt                     |
 | [**subagent**](packages/subagent/)          | Adds a `subagent` tool that delegates tasks to isolated pi subprocesses                   |
 | [**telegram-new-session**](packages/telegram-new-session/) | Adds a `/new` Telegram command that starts a fresh session (Telegram-only; ADR 0015)      |
@@ -52,6 +53,76 @@ model[provider] | branch +2 ~1 ?3 | cwd | ctx: 43% (54.0k/128.0k) | ↑150 ↓27
 | **think: level**         | Current thinking level (`off`, `min`, `low`, `med`, `high`, `max`) |
 
 Segments are color-coded: git status turns red when dirty, green when clean, context usage shows in yellow, etc.
+
+## Output style
+
+Pick a **response style** — named guidance injected into the system prompt on
+every agent turn — with the `/output-style` command. Unlike a skill, which
+runs only when invoked, the active style nudges every response without you
+remembering anything. It is model guidance, not enforcement: it shapes how
+responses are written, it does not change your task, the agent's tool
+permissions, or repository instructions.
+
+```
+/output-style                     # interactive selector (default + discovered styles)
+/output-style simple-english      # select a style directly
+/output-style default             # revert to no custom guidance
+/output-style terse --project     # select for this project only (needs a trusted project)
+/output-style terse --global      # select for all projects
+```
+
+### Style folders
+
+A style is a folder named with a lowercase-kebab-case ID containing a
+`STYLE.md`. The optional YAML frontmatter carries a `description` (shown in
+selectors and completions); the Markdown body is the instruction text
+appended to the prompt:
+
+```
+~/.pi/agent/output-styles/        # global styles (all projects)
+  terse/
+    STYLE.md
+  simple-english/                 # also available bundled — see below
+    STYLE.md
+
+<project>/.pi/output-styles/      # project styles (trusted projects only)
+  terse/
+    STYLE.md
+```
+
+- Styles merge whole by folder name with precedence **bundled < global <
+  project** — a project style named `terse` replaces the global one inside
+  that project.
+- `default` is a reserved ID (it means "no custom style"); a folder with that
+  name is skipped with a warning. So are folders with invalid names, without
+  a `STYLE.md`, or with an empty body — valid siblings still load, and a bad
+  folder never blocks startup.
+- Definitions are re-read at every session start (`/new`, `/resume`,
+  `/fork`); there is no file watching. Renaming a folder changes its style ID.
+- Project folders (and project settings — see below) are read only when pi
+  trusts the project.
+- The part ships one bundled style, `simple-english` — ASD-STE100-flavored
+  coding-agent prose, extracted from the `simple-english` skill. Styles are
+  self-contained Markdown; put your own in either discovery folder above.
+
+### Selection and persistence
+
+The active selection is the single `outputStyle` key in Pi's settings JSON,
+at global scope (`~/.pi/agent/settings.json`) and project scope
+(`<project>/.pi/settings.json`). Project overrides global; missing, empty, or
+`"default"` means no custom guidance. The selection survives restarts,
+`/new`, `/resume`, `/fork`, and extension reloads — it is config, not session
+state. `/output-style` writes the chosen scope's settings file via a
+read-modify-write that preserves unrelated keys; by default it targets the
+scope currently providing the selection (else global), or use `--global` /
+`--project`. A configured style whose folder disappears stays on `default`
+with a warning; your config is never rewritten automatically.
+
+### Context view note
+
+Style guidance is appended at dispatch time (`before_agent_start`). `/context`
+reconstructs Pi's base system prompt, so the injected style section may not
+appear there.
 
 ## Header
 
@@ -182,6 +253,12 @@ packages/
 │   ├── index.ts        Exports registerFooter(pi)
 │   ├── lib.ts          Pure, testable functions
 │   └── lib.test.ts     Vitest tests
+├── output-style/
+│   ├── index.ts        Exports registerOutputStyle(pi) — /output-style + prompt injection
+│   ├── config.ts       Style folder discovery + STYLE.md parsing
+│   ├── lib.ts          outputStyle setting resolution + prompt/settings helpers
+│   ├── styles/         Bundled styles (simple-english/STYLE.md)
+│   └── *.test.ts       Vitest tests
 └── …                   Future packages go here
 ```
 

@@ -32,6 +32,7 @@ describe("parseConfig", () => {
 			"prompt-prefix",
 			"subagent",
 			"telegram-new-session",
+			"output-style",
 		]);
 	});
 

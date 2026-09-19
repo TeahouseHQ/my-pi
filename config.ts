@@ -24,6 +24,7 @@ export const PART_NAMES = [
 	"prompt-prefix",
 	"subagent",
 	"telegram-new-session",
+	"output-style",
 ] as const;
 
 export type PartName = (typeof PART_NAMES)[number];
