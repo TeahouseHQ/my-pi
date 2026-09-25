@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { registerOutputStyle } from "./index";
+import { getActiveStyle } from "./active";
 import { STYLE_SECTION_NOTE, styleSectionHeading } from "./lib";
 
 // ── Fakes ──────────────────────────────────────────────────────────────────
@@ -350,6 +351,64 @@ describe("selector", () => {
 		expect(fake.notifies).toEqual([]); // No UI channel to show the syntax on.
 		expectPathMissing(globalSettingsPath);
 	});
+
+	it("offers scope actions on a trusted project and persists to the chosen one", async () => {
+		writeGlobalStyle("terse");
+		ui.trusted = true;
+		writeJson(projectSettingsPath, { model: "keep-me" });
+		const fake = await startSession();
+		fake.selectResponses.push("terse", "Project settings");
+
+		await runCommand(fake, "");
+
+		expect(fake.selectCalls).toHaveLength(2);
+		expect(fake.selectCalls[1].title).toBe(`Where should "terse" persist?`);
+		expect(fake.selectCalls[1].options).toEqual(["Global settings", "Project settings"]);
+		expect(readJson(projectSettingsPath)).toEqual({ model: "keep-me", outputStyle: "terse" });
+		expectPathMissing(globalSettingsPath);
+		expect(fake.notifies.at(-1)).toMatchObject({ message: /Output style: terse \(project\)/ });
+	});
+
+	it("offers the project action first when the project provides the current selection", async () => {
+		writeGlobalStyle("simple-english");
+		ui.trusted = true;
+		writeProjectStyle("terse");
+		writeJson(projectSettingsPath, { outputStyle: "terse" });
+		const fake = await startSession();
+		fake.selectResponses.push("simple-english", "Global settings");
+
+		await runCommand(fake, "");
+
+		expect(fake.selectCalls[1].options).toEqual(["Project settings", "Global settings"]);
+		expect(readJson(globalSettingsPath)).toEqual({ outputStyle: "simple-english" });
+		expect(fake.notifies.at(-1)).toMatchObject({ message: /Output style: simple-english \(global\)/ });
+	});
+
+	it("an untrusted project skips the scope menu and persists globally", async () => {
+		writeGlobalStyle("terse");
+		ui.trusted = false;
+		const fake = await startSession();
+		fake.selectResponses.push("terse");
+
+		await runCommand(fake, "");
+
+		expect(fake.selectCalls).toHaveLength(1);
+		expect(readJson(globalSettingsPath)).toEqual({ outputStyle: "terse" });
+	});
+
+	it("cancelling the scope menu changes nothing", async () => {
+		writeGlobalStyle("terse");
+		ui.trusted = true;
+		const fake = await startSession();
+		fake.selectResponses.push("terse", undefined);
+
+		await runCommand(fake, "");
+
+		expect(fake.selectCalls).toHaveLength(2);
+		expectPathMissing(globalSettingsPath);
+		expectPathMissing(projectSettingsPath);
+		expect(fake.notifies).toEqual([]);
+	});
 });
 
 // ── Prompt injection ───────────────────────────────────────────────────────
@@ -442,6 +501,36 @@ describe("session lifecycle", () => {
 		ui.cwd = path.join(root, "other-project");
 		await fake.fire("session_start", { reason: "new" }, fakeCtx(fake, ui));
 		expect(beforeAgent(fake, "base")?.systemPrompt).toContain("terse"); // Global still applies.
+	});
+});
+
+// ── Active-style channel ───────────────────────────────────────────────────
+
+describe("active-style channel", () => {
+	it("publishes the resolved selection at session start and after each selection", async () => {
+		writeGlobalStyle("terse");
+		const fake = await startSession();
+		expect(getActiveStyle()).toEqual({ name: "default", scope: undefined, unknown: false });
+
+		await runCommand(fake, "terse");
+		expect(getActiveStyle()).toEqual({ name: "terse", scope: "global", unknown: false });
+	});
+
+	it("publishes project-scope selections and clears on session_shutdown", async () => {
+		ui.trusted = true;
+		writeProjectStyle("repo-style");
+		writeJson(projectSettingsPath, { outputStyle: "repo-style" });
+		const fake = await startSession();
+		expect(getActiveStyle()).toEqual({ name: "repo-style", scope: "project", unknown: false });
+
+		await fake.fire("session_shutdown", { reason: "new" }, fakeCtx(fake, ui));
+		expect(getActiveStyle()).toBeUndefined();
+	});
+
+	it("publishes an unknown configured style unresolved — the footer hides it", async () => {
+		writeJson(globalSettingsPath, { outputStyle: "deleted-style" });
+		await startSession();
+		expect(getActiveStyle()).toEqual({ name: "deleted-style", scope: "global", unknown: true });
 	});
 });
 

@@ -2,12 +2,13 @@
  * Pure helpers for the output-style part: resolving the effective selection
  * from the `outputStyle` key in global and project settings, composing the
  * system-prompt section, and reading/writing that key with a settings
- * read-modify-write that preserves unrelated keys.
+ * read-modify-write that preserves unrelated keys and never replaces a
+ * symlink at the file's path.
  */
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readlink, rename, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { withFileMutationQueue } from "@earendil-works/pi-coding-agent";
 
 /** The settings key holding the active selection, at global and project scope. */
@@ -114,19 +115,51 @@ export function readSettingKey(filePath: string, key: string): SettingRead {
 
 export type SettingWriteResult = { ok: true } | { ok: false; error: string };
 
+/** Symlink chains longer than this report an error, mirroring the kernel's ELOOP limit. */
+const MAX_SYMLINK_DEPTH = 40;
+
+/**
+ * The path a write must land on: `filePath` with a symlink at its final
+ * component resolved to its target. Chains are followed; a missing or
+ * dangling entry resolves to itself (creating the target on demand).
+ *
+ * The atomic temp-file rename below replaces a directory entry, not file
+ * contents, so without this step writing through a symlinked settings file —
+ * e.g. a dotfiles-managed `~/.pi/agent/settings.json` — would silently
+ * replace the link with a regular file and strand the real copy.
+ */
+async function resolveWriteTarget(filePath: string): Promise<string> {
+	let current = filePath;
+	for (let depth = 0; depth < MAX_SYMLINK_DEPTH; depth++) {
+		let stats;
+		try {
+			stats = await lstat(current);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return current;
+			throw error;
+		}
+		if (!stats.isSymbolicLink()) return current;
+		const link = await readlink(current);
+		current = isAbsolute(link) ? link : join(dirname(current), link);
+	}
+	throw new Error(`too many levels of symbolic links: ${filePath}`);
+}
+
 /**
  * Set one string key in a settings JSON file via read-modify-write, preserving
  * every unrelated key. Creates the file (and parent directories) on demand;
- * refuses to rewrite a malformed file. The write lands via a temp-file rename
- * under pi's per-file mutation queue, so concurrent updates cannot clobber
- * each other.
+ * refuses to rewrite a malformed file. A symlink at the path is written
+ * through, never replaced. The write lands via a temp-file rename on the
+ * resolved target under pi's per-file mutation queue, so concurrent updates
+ * cannot clobber each other.
  */
 export async function writeSettingKey(filePath: string, key: string, value: string): Promise<SettingWriteResult> {
 	const update = async (): Promise<SettingWriteResult> => {
+		const writeTarget = await resolveWriteTarget(filePath);
 		let settings: Record<string, unknown> = {};
 		let raw: string | undefined;
 		try {
-			raw = await readFile(filePath, "utf8");
+			raw = await readFile(writeTarget, "utf8");
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 		}
@@ -143,10 +176,10 @@ export async function writeSettingKey(filePath: string, key: string, value: stri
 			settings = parsed as Record<string, unknown>;
 		}
 		settings[key] = value;
-		await mkdir(dirname(filePath), { recursive: true });
-		const tmpPath = `${filePath}.tmp`;
+		await mkdir(dirname(writeTarget), { recursive: true });
+		const tmpPath = `${writeTarget}.tmp`;
 		await writeFile(tmpPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-		await rename(tmpPath, filePath);
+		await rename(tmpPath, writeTarget);
 		return { ok: true };
 	};
 	try {

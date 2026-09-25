@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -207,5 +207,58 @@ describe("writeSettingKey", () => {
 			writeSettingKey(file, "third", "c"),
 		]);
 		expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ outputStyle: "a", other: "b", third: "c" });
+	});
+
+	// A dotfiles-managed settings file is a symlink; the atomic temp-file
+	// rename must replace the link's target, never the link itself.
+	it("writes through a symlink instead of replacing the link", async () => {
+		const root = mkdtempSync(path.join(os.tmpdir(), "outstyle-link-"));
+		const realDir = path.join(root, "dotfiles");
+		mkdirSync(realDir, { recursive: true });
+		const real = path.join(realDir, "settings.json");
+		writeFileSync(real, JSON.stringify({ theme: "dark" }, null, 2));
+		const link = path.join(root, "settings.json");
+		symlinkSync(real, link);
+
+		const result = await writeSettingKey(link, "outputStyle", "terse");
+
+		expect(result).toEqual({ ok: true });
+		expect(lstatSync(link).isSymbolicLink()).toBe(true);
+		expect(readlinkSync(link)).toBe(real);
+		expect(JSON.parse(readFileSync(real, "utf8"))).toEqual({ theme: "dark", outputStyle: "terse" });
+		expect(readdirSync(root)).toEqual(["dotfiles", "settings.json"]);
+		expect(readdirSync(realDir)).toEqual(["settings.json"]);
+	});
+
+	it("resolves a relative symlink, like dotfiles-managed settings", async () => {
+		const root = mkdtempSync(path.join(os.tmpdir(), "outstyle-rel-"));
+		mkdirSync(path.join(root, "pi"), { recursive: true });
+		mkdirSync(path.join(root, "dotfiles"), { recursive: true });
+		const real = path.join(root, "dotfiles", "settings.json");
+		writeFileSync(real, "{}\n");
+		const link = path.join(root, "pi", "settings.json");
+		symlinkSync(path.join("..", "dotfiles", "settings.json"), link);
+
+		const result = await writeSettingKey(link, "outputStyle", "terse");
+
+		expect(result).toEqual({ ok: true });
+		expect(lstatSync(link).isSymbolicLink()).toBe(true);
+		expect(JSON.parse(readFileSync(real, "utf8"))).toEqual({ outputStyle: "terse" });
+		expect(readdirSync(path.join(root, "pi"))).toEqual(["settings.json"]);
+		expect(readdirSync(path.join(root, "dotfiles"))).toEqual(["settings.json"]);
+	});
+
+	it("heals a dangling symlink by creating its target and keeping the link", async () => {
+		const root = mkdtempSync(path.join(os.tmpdir(), "outstyle-dangle-"));
+		const link = path.join(root, "settings.json");
+		symlinkSync(path.join("dotfiles", "settings.json"), link);
+
+		const result = await writeSettingKey(link, "outputStyle", "terse");
+
+		expect(result).toEqual({ ok: true });
+		expect(lstatSync(link).isSymbolicLink()).toBe(true);
+		expect(JSON.parse(readFileSync(path.join(root, "dotfiles", "settings.json"), "utf8"))).toEqual({
+			outputStyle: "terse",
+		});
 	});
 });

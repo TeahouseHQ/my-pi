@@ -2,6 +2,23 @@
  * Pure, testable functions extracted from the my-pi extension.
  */
 
+import { RESERVED_STYLE_ID } from "../output-style/config";
+import type { StyleSelection } from "../output-style/lib";
+
+// ── Output-style segment ─────────────────────────────────────────────────
+
+/**
+ * Label for the footer's output-style segment: the active style ID when a
+ * custom, discovered style is selected. `default` (no custom guidance), an
+ * unknown configured style (effective style is default; the output-style part
+ * already warned), and an absent selection (output-style part not loaded or
+ * not started) all hide the segment — undefined means "don't render".
+ */
+export function styleSegmentLabel(selection: StyleSelection | undefined): string | undefined {
+	if (!selection || selection.unknown || selection.name === RESERVED_STYLE_ID) return undefined;
+	return selection.name;
+}
+
 // ── Token formatting ───────────────────────────────────────────────────────
 
 /** Format a token count as a compact human-readable string. */

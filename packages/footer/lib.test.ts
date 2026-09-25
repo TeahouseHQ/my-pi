@@ -8,7 +8,9 @@ import {
 	isLinkedWorktree,
 	parseStashCount,
 	parseTelegramFooterStatus,
+	styleSegmentLabel,
 } from "./lib";
+import type { StyleSelection } from "../output-style/lib";
 
 // ── fmtTokens ──────────────────────────────────────────────────────────────
 
@@ -29,6 +31,25 @@ describe("fmtTokens", () => {
 		expect(fmtTokens(1_000_000)).toBe("1.00M");
 		expect(fmtTokens(1_234_567)).toBe("1.23M");
 		expect(fmtTokens(12_000_000)).toBe("12.00M");
+	});
+});
+
+// ── styleSegmentLabel ────────────────────────────────────────────────────
+
+describe("styleSegmentLabel", () => {
+	const selection = (overrides: Partial<StyleSelection>): StyleSelection => (
+		{ name: "terse", scope: "global", unknown: false, ...overrides }
+	);
+
+	it("shows the style ID for a custom, discovered selection", () => {
+		expect(styleSegmentLabel(selection({}))).toBe("terse");
+		expect(styleSegmentLabel(selection({ scope: "project" }))).toBe("terse");
+	});
+
+	it("hides default, unknown, and absent selections", () => {
+		expect(styleSegmentLabel(selection({ name: "default", scope: undefined }))).toBeUndefined();
+		expect(styleSegmentLabel(selection({ name: "deleted-style", unknown: true }))).toBeUndefined();
+		expect(styleSegmentLabel(undefined)).toBeUndefined();
 	});
 });
 

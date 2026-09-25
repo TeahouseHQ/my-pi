@@ -3,8 +3,15 @@
  *
  * Replaces the default footer with a single line, each widget prefixed with a
  * Nerd Font glyph (requires a Nerd Font-patched terminal font):
- *    cwd |  branch ↑N ↓N |  +N ~N ?N ✕N ⚑N |  [bar] |  ⇡in ⇣out |  model[provider] |  telegram connected
+ *    cwd |  branch ↑N ↓N |  +N ~N ?N ✕N ⚑N |  [bar] |  ⇡in ⇣out |  model[provider] |  style |  telegram connected
  * All segments joined by " | ".
+ *
+ * The style segment appears only while a custom output style is active — it
+ * reads the selection published by the output-style part through
+ * getActiveStyle() (packages/output-style/active.ts) and re-renders when that
+ * selection changes. With `default` selected, an unknown configured style, or
+ * the output-style part not selected for this project, the segment is omitted
+ * (see styleSegmentLabel in lib.ts).
  *
  * The telegram segment only appears when the @llblab/pi-telegram extension
  * has set a status (i.e. it is installed); it reads that extension's
@@ -27,8 +34,10 @@ import {
 	parseGitPorcelainV2,
 	parseStashCount,
 	parseTelegramFooterStatus,
+	styleSegmentLabel,
 	type GitStatus,
 } from "./lib";
+import { getActiveStyle, onActiveStyleChange } from "../output-style/active";
 
 const SEP = " | ";
 
@@ -45,6 +54,7 @@ const ICON = {
 	context: "\uf0e4", // nf-fa-dashboard (gauge)
 	tokens: "\uf0ec", // nf-fa-exchange
 	model: "\uf2db", // nf-fa-microchip
+	style: "\uf1fc", // nf-fa-paint-brush
 	telegram: "\uf2c6", // nf-fa-telegram
 } as const;
 
@@ -96,10 +106,13 @@ export function registerFooter(pi: ExtensionAPI) {
 			const unsub = footerData.onBranchChange(() => {
 				refreshGitStatus(pi, ctx.cwd);
 			});
+			// Re-render when the output-style part publishes a new selection.
+			const unsubStyle = onActiveStyleChange(() => tuiHandle?.requestRender());
 
 			return {
 				dispose() {
 					unsub();
+					unsubStyle();
 					tuiHandle = undefined;
 					if (gitStatusTimer) clearInterval(gitStatusTimer);
 				},
@@ -175,6 +188,12 @@ export function registerFooter(pi: ExtensionAPI) {
 						theme.fg("toolTitle", tokenStr),
 						theme.fg("accent", `${ICON.model} ${modelStr}`),
 					);
+
+					// --- Active output style (only when a custom style is active) ---
+					const styleLabel = styleSegmentLabel(getActiveStyle());
+					if (styleLabel) {
+						segments.push(theme.fg("muted", `${ICON.style} ${styleLabel}`));
+					}
 
 					// --- Telegram connect status (only when pi-telegram is active) ---
 					// Connected: the instance's thread display name, or "connected"

@@ -61,7 +61,11 @@ read-modify-write (per-file mutation queue, temp-file rename) that preserves
 unrelated keys and refuses to rewrite a malformed file.
 
 **`/output-style` targets a scope.** Bare, it opens a TUI selector
-(`default` + discovered IDs, lexical). With a name it selects directly.
+(`default` + discovered IDs, lexical), then a second menu offering one
+action per persistence scope — global or project. The scope currently
+providing the effective selection (else global) is offered first; an
+untrusted project skips the menu (global is the only valid target).
+With a name it selects directly.
 By default the write lands in the scope currently providing the effective
 selection (else global); `--global`/`--project` override that. Project-scope
 writes require a trusted project. Selecting the current value is an idempotent

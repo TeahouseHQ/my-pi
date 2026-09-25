@@ -159,3 +159,7 @@ _Avoid_: "style file" (the unit is the folder; `STYLE.md` is one file inside), "
 **Active output style**:
 The single `outputStyle` key in pi's settings JSON, at global or project scope — project overrides global; project settings are read only when trusted. Missing, empty, or `"default"` means no guidance, and `before_agent_start` returns no result so prompts stay byte-for-byte unchanged. Config-driven, never session-scoped: the selection survives restarts, `/new`, `/resume`, and `/fork`, and a style whose folder vanished falls back to `default` with a warning instead of being auto-rewritten.
 _Avoid_: "current style" (ambiguous about scope), "selected style" (fine informally), "session style" (deliberately wrong — it is not session state)
+
+**Active-style channel**:
+The module-level mirror of the resolved selection (`packages/output-style/active.ts`) that the output-style part publishes — on `session_start`, after every `/output-style` change, and cleared on `session_shutdown`. Consumers read it with `getActiveStyle` and re-render via `onActiveStyleChange`; currently only the footer's **style segment** (` paint-brush glyph + style ID`, theme muted). The segment shows only a custom, discovered style — `default`, an unknown configured style, and an unpublished channel (output-style part not selected for this project) all hide it (`styleSegmentLabel` in `packages/footer/lib.ts`).
+_Avoid_: "global style state" (the channel owns nothing — the output-style part does), "event bus" (one channel, not a bus)

@@ -30,6 +30,7 @@ import {
 	type OutputStyle,
 	type StyleDiscovery,
 } from "./config";
+import { setActiveStyle } from "./active";
 import {
 	appendStyleSection,
 	OUTPUT_STYLE_SETTINGS_KEY,
@@ -65,6 +66,10 @@ interface OutputStyleState {
 function styleOptionIds(state: OutputStyleState): string[] {
 	return [RESERVED_STYLE_ID, ...[...state.styles.values()].map((style) => style.id)];
 }
+
+/** Menu actions in the interactive scope menu; the label maps 1:1 to a scope. */
+const GLOBAL_SCOPE_ACTION = "Global settings";
+const PROJECT_SCOPE_ACTION = "Project settings";
 
 /**
  * Load style definitions and resolve the selection for this session's
@@ -129,6 +134,9 @@ export function registerOutputStyle(pi: ExtensionAPI, paths: OutputStylePaths = 
 	pi.on("session_start", (_event, ctx) => {
 		const loaded = loadState(ctx, paths);
 		state = loaded.state;
+		// Publish the resolved selection so other parts (the footer's style
+		// segment) can show it without re-deriving it from settings.
+		setActiveStyle(state.selection);
 		// Surface aggregated warnings once per session, only when someone can see them.
 		if (loaded.warnings.length > 0 && ctx.hasUI) {
 			ctx.ui.notify(loaded.warnings.join("\n"), "warning");
@@ -139,6 +147,7 @@ export function registerOutputStyle(pi: ExtensionAPI, paths: OutputStylePaths = 
 		// Drop the definitions and selection so a stale session's state can never
 		// leak into the next one; `session_start` rebuilds everything.
 		state = undefined;
+		setActiveStyle(undefined);
 	});
 
 	pi.on("before_agent_start", (event) => {
@@ -197,7 +206,10 @@ export function registerOutputStyle(pi: ExtensionAPI, paths: OutputStylePaths = 
 
 			// Commands always run inside a session, so state normally exists;
 			// load lazily if it somehow does not rather than fail.
-			if (!state) state = loadState(ctx, paths).state;
+			if (!state) {
+				state = loadState(ctx, paths).state;
+				setActiveStyle(state.selection);
+			}
 			const current = state;
 
 			if (names.length === 0) {
@@ -211,7 +223,9 @@ export function registerOutputStyle(pi: ExtensionAPI, paths: OutputStylePaths = 
 					styleOptionIds(current),
 				);
 				if (chosen === undefined) return; // Cancelled — leave everything unchanged.
-				await selectStyle(current, chosen, undefined, ctx, notify);
+				const scope = await chooseScope(current, chosen, ctx);
+				if (scope === undefined) return; // Cancelled — leave everything unchanged.
+				await selectStyle(current, chosen, scope, ctx, notify);
 				return;
 			}
 
@@ -219,6 +233,27 @@ export function registerOutputStyle(pi: ExtensionAPI, paths: OutputStylePaths = 
 			await selectStyle(current, names[0]!, explicitScope, ctx, notify);
 		},
 	});
+
+	/**
+	 * Interactive scope menu for a style the user just picked: one action per
+	 * persistence scope. The scope currently providing the effective selection
+	 * (else global) is offered first. An untrusted project gets no menu —
+	 * project scope is unavailable there, so global is the only action.
+	 */
+	async function chooseScope(
+		current: OutputStyleState,
+		name: string,
+		ctx: ExtensionCommandContext,
+	): Promise<"global" | "project" | undefined> {
+		if (!ctx.isProjectTrusted()) return "global";
+		const actions =
+			current.selection.scope === "project"
+				? [PROJECT_SCOPE_ACTION, GLOBAL_SCOPE_ACTION]
+				: [GLOBAL_SCOPE_ACTION, PROJECT_SCOPE_ACTION];
+		const chosen = await ctx.ui.select(`Where should "${name}" persist?`, actions);
+		if (chosen === undefined) return undefined; // Cancelled — leave everything unchanged.
+		return chosen === PROJECT_SCOPE_ACTION ? "project" : "global";
+	}
 
 	/** Validate, persist to the targeted scope, and re-resolve the in-memory selection. */
 	async function selectStyle(
@@ -257,6 +292,9 @@ export function registerOutputStyle(pi: ExtensionAPI, paths: OutputStylePaths = 
 				current.styles.keys(),
 			);
 		}
+		// Publish even on the no-op path — a no-op keeps the selection, but the
+		// channel may not have been published to yet (e.g. after a lazy load).
+		setActiveStyle(current.selection);
 		notify(`Output style: ${name} (${scope})`);
 	}
 }
