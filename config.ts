@@ -23,7 +23,6 @@ export const PART_NAMES = [
 	"context-view",
 	"prompt-prefix",
 	"subagent",
-	"telegram-new-session",
 	"output-style",
 ] as const;
 

@@ -31,7 +31,6 @@ describe("parseConfig", () => {
 			"context-view",
 			"prompt-prefix",
 			"subagent",
-			"telegram-new-session",
 			"output-style",
 		]);
 	});

@@ -18,7 +18,6 @@ import { registerHeader } from "./packages/header";
 import { registerOutputStyle } from "./packages/output-style";
 import { registerPromptPrefix } from "./packages/prompt-prefix";
 import { registerSubagent } from "./packages/subagent";
-import { registerTelegramNewSession } from "./packages/telegram-new-session";
 
 export default function (pi: ExtensionAPI) {
 	const { parts, warning } = resolveConfig();
@@ -43,7 +42,6 @@ export default function (pi: ExtensionAPI) {
 		"context-view": registerContextView,
 		"prompt-prefix": registerPromptPrefix,
 		subagent: registerSubagent,
-		"telegram-new-session": registerTelegramNewSession,
 		"output-style": registerOutputStyle,
 	};
 	for (const name of PART_NAMES) {

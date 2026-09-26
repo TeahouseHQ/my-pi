@@ -12,7 +12,6 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 | [**output-style**](packages/output-style/)  | `/output-style` picks a response style injected into the system prompt on every turn        |
 | [**prompt-prefix**](packages/prompt-prefix/) | Adds a `> ` chevron plus thinking/history status to the input prompt                     |
 | [**subagent**](packages/subagent/)          | Adds a `subagent` tool that delegates tasks to isolated pi subprocesses                   |
-| [**telegram-new-session**](packages/telegram-new-session/) | Adds a `/new` Telegram command that starts a fresh session (Telegram-only; ADR 0015)      |
 
 > Add a new part by creating a folder under `packages/`, adding it to `PART_NAMES`, and registering it in `index.ts`.
 

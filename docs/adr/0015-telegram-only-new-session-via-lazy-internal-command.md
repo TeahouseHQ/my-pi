@@ -1,5 +1,10 @@
 # Telegram-only `/new` via a lazily-registered internal pi command
 
+> **Status: retired.** pi-telegram ≥ 0.51 ships a native Telegram `/new`
+> command that calls `ctx.newSession()` itself, so the `telegram-new-session`
+> part this decision introduced has been removed. Kept as a record; no code
+> implements it anymore.
+
 `telegram-new-session` contributes a `/new` command to the paired Telegram
 chat that starts a fresh pi session. The user requirement is that it be
 Telegram-only: nothing may appear in the TUI's `/` command menu.
