@@ -7,6 +7,7 @@
     "test": "vitest run",
     "bake:sprite": "node scripts/bake-sprite.mjs",
     "decode:chart": "node scripts/chart-to-sprite.mjs",
+    "graft:deep": "bash scripts/graft-deep.sh",
     "lint": "eslint .",
     "types": "tsc --noEmit",
     "check": "npm run lint && npm run types && npm test"

@@ -15,6 +15,14 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 
 > Add a new part by creating a folder under `packages/`, adding it to `PART_NAMES`, and registering it in `index.ts`.
 
+## Graft deep tier
+
+Run `npm run graft:deep` to build this repo's model-written graft summaries through the local LiteLLM proxy. The command uses `http://127.0.0.1:4000/v1`, the `fast` model, and the `LITELLM_PI_KEY` environment variable. It accepts `GRAFT_API_KEY` if that key is not set. Set `GRAFT_BASE_URL` or `GRAFT_MODEL` to change the endpoint or model for this command. Pass graft flags after `--`, for example `npm run graft:deep -- --concurrency 2`.
+
+The command sets graft options only for its own process. It does not store a key or change global graft settings. The deep build sends source code to the configured proxy and can incur model costs. Normal graft queries need no model. Run `graft check` after the build to see meaning-tier progress. The generated `graft/` directory is local and ignored by Git.
+
+The project command presents graft's symbol targets as JSON objects. This keeps the target ID separate from its kind and line span: `fast` otherwise copies the full target description into the ID and graft cannot match the summary. The adapter runs only for this command and fails if the expected snippet changes in graft's crux module. Graft caches completed summaries, so rerun the command to retry pending files.
+
 ## Part selection
 
 By default every part loads in every project. A project can narrow that with an
