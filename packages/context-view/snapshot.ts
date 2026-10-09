@@ -2,7 +2,7 @@
  * Context snapshot — assembles what the LLM currently receives.
  *
  * A snapshot is a live reconstruction ("what would be sent next turn"), never
- * a capture of the exact last-sent payload (see CONTEXT.md, "Snapshot"). The
+ * a capture of the exact last-sent payload (see GLOSSARY.md, "Snapshot"). The
  * assembly is pure: `buildSnapshot` takes already-extracted inputs, so the
  * pi-facing adaptation lives in index.ts and everything here is testable.
  *
