@@ -74,8 +74,6 @@ _Avoid_: "system prompts" (plural — there is exactly one)
 
 ### Header
 
-> Terminology note: these were renamed this session — **sprite** was "banner", **logo** was "wordmark", **Banner** was "logo cell". Code and docs all use the new terms.
-
 **Sprite**:
 The decorative image the header renders in place of the spark art (`CLAUDE_SPARK`). Fixed, non-configurable at runtime, drawn as **quadrant cells** (a 2×2 block-quadrant glyph per cell — previously half-block cells). Width varies with the source aspect × 6 rows (width halved by the quadrant fold, height resampled, 6 rows). **Mirror orientation is chosen at bake time** (a `bake:sprite` flag flips the bitmap before chafa) and baked into the artifact — the render path just prints, no longer reversing cells per draw. Sits inside the Banner, composed horizontally beside the metadata column — it is no longer a standalone block with the subtitle and sections stacked below it.
 _Avoid_: "banner" (that's now the whole left cell — sprite + logo — not the image alone; this image was *formerly* called the banner), "spark" (the ASCII art the sprite replaces), "image" alone (ambiguous with the source asset), "half-block sprite" (the sprite is now quadrant cells; half-blocks survive only in the logo)
