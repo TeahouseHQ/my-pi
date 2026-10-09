@@ -6,11 +6,11 @@ Issues live in GitHub (TeahouseHQ/my-pi), managed via `gh` CLI. See `docs/agents
 
 ### Triage labels
 
-Using the default five-label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+Use the default five labels: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context repo — one `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.
+Single-context repo: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 ## Definition of done
 
