@@ -5,7 +5,7 @@
  * what the model receives, in dispatch order: the composed system prompt
  * (decomposed into its structured inputs), tool schemas, and the
  * compaction-aware message branch — each with token estimates (see
- * CONTEXT.md, "Context view"). The snapshot is reconstructed live at open
+ * GLOSSARY.md, "Context view"). The snapshot is reconstructed live at open
  * time; nothing is written to the session, so the view can never pollute the
  * context it measures.
  *

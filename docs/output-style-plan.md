@@ -11,7 +11,7 @@ The motivation: instead of a skill like `simple-english` being invoked on demand
 ## Plan
 
 1. **Define the output-style domain and architectural decision.**
-   - Add `output-style` to the **Part** list in `CONTEXT.md`.
+   - Add `output-style` to the **Part** list in `GLOSSARY.md`.
    - Define an **Output style** as named guidance appended to the system prompt for every agent turn.
    - Define the reserved `default` style as no additional guidance.
    - Add ADR 0016 (`docs/adr/0016-config-driven-output-styles.md`) to document the prompt-injection seam, folder-based discovery, `outputStyle` configuration key with global/project precedence, project-trust requirement, and restart-persistent selection.
@@ -123,7 +123,7 @@ The motivation: instead of a skill like `simple-english` being invoked on demand
 - `config.test.ts` — Update the expected part list and part-selection coverage.
 - `index.ts` — Import and register `registerOutputStyle`.
 - `README.md` — Document the part, command, folder format, discovery paths, `outputStyle` key, precedence, trust rules, and persistence behavior.
-- `CONTEXT.md` — Add output-style terminology and clarify dispatch-time system-prompt guidance.
+- `GLOSSARY.md` — Add output-style terminology and clarify dispatch-time system-prompt guidance.
 
 ## New Files
 

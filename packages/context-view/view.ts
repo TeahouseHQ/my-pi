@@ -3,7 +3,7 @@
  *
  * A pi-tui Component (see docs/tui.md): render(width) draws the snapshot,
  * handleInput owns scrolling and expand/collapse, Esc/q exits via done().
- * Everything shown is current, prompt-bound material (see CONTEXT.md,
+ * Everything shown is current, prompt-bound material (see GLOSSARY.md,
  * "Context view") — the view never writes to the session.
  *
  * Navigation:
