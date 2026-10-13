@@ -15,14 +15,6 @@ A monorepo of [Pi](https://github.com/earendil-works/pi-coding-agent) customizat
 
 > Add a new part by creating a folder under `packages/`, adding it to `PART_NAMES`, and registering it in `index.ts`.
 
-## Graft deep tier
-
-Run `npm run graft:deep` to build this repo's model-written graft summaries through the local LiteLLM proxy. The command uses `http://127.0.0.1:4000/v1`, the `fast` model, and the `LITELLM_PI_KEY` environment variable. It accepts `GRAFT_API_KEY` if that key is not set. Set `GRAFT_BASE_URL` or `GRAFT_MODEL` to change the endpoint or model for this command. Pass graft flags after `--`, for example `npm run graft:deep -- --concurrency 2`.
-
-The command sets graft options only for its own process. It does not store a key or change global graft settings. The deep build sends source code to the configured proxy and can incur model costs. Normal graft queries need no model. Run `graft check` after the build to see meaning-tier progress. The generated `graft/` directory is local and ignored by Git.
-
-The project command presents graft's symbol targets as JSON objects. This keeps the target ID separate from its kind and line span: `fast` otherwise copies the full target description into the ID and graft cannot match the summary. The adapter runs only for this command and fails if the expected snippet changes in graft's crux module. Graft caches completed summaries, so rerun the command to retry pending files.
-
 ## Part selection
 
 By default every part loads in every project. A project can narrow that with an
@@ -211,44 +203,6 @@ Pi will auto-load the extension on next start.
 npm install
 npm run check
 ```
-
-## Graft
-
-The repo is indexed with [Graft](https://github.com/NanoNets/context-graph-engine#readme) — a context graph of small linked markdown cards in `graft/`, one per source file, carrying exact `file:line` spans. `graft/` itself is **git-ignored**: it's a local, regenerable cache, so every clone builds its own. Only the agent wiring in `AGENTS.md` (the fenced `graft:start` block) is committed.
-
-### Setup (per clone)
-
-```sh
-npm install -g @nanonets/graft   # CLI + tree-sitter parsers
-graft build                      # regenerate graft/ from the source ($0, no key)
-```
-
-`graft init` wires the graph into AI coding agents — instruction files plus MCP. It was run once here, so new clones don't need it; to re-wire (or wire another agent), run it interactively, or non-interactively scoped to this repo:
-
-```sh
-graft init --agents agents --no-global
-```
-
-`--no-global` keeps writes inside the repo (the default also touches `~/.codex/`, affecting all repos); `--list-agents` shows the known agent ids (`agents` is the generic AGENTS.md target).
-
-### Keeping it fresh
-
-- After large code changes, run `graft build` again — it's deterministic and fast.
-- `graft check` fails when `graft/` is stale relative to the code (for CI).
-- `graft uninstall` removes everything `graft init` wrote (inverse of init).
-
-### Using the graph
-
-```sh
-graft map                                  # repo orientation: dir clusters, hubs, hotspots
-graft ask "where is auth handled?" --source  # ranked nodes with code spans inlined
-graft skeleton packages/footer/lib.ts      # signatures-only view of one file
-graft callers <symbol>                     # precomputed call edges (--depth N to walk)
-graft grep "<pattern>"                     # exhaustive regex over indexed files
-graft viz                                  # interactive visualization
-```
-
-Agents pick the graph up automatically from the `AGENTS.md` section on their next session.
 
 ## Project structure
 
