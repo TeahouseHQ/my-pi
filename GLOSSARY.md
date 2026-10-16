@@ -38,6 +38,14 @@ _Avoid_: "history file" (that's the storage detail, not the concept)
 A delegatable specialist the `subagent` tool spawns in an isolated `pi` process, defined by an **agent definition**. Distinct from Pi's "agent" (the assistant itself) — a subagent is always *sub*-ordinate, invoked on demand, never the top-level loop. Listed in the header's **`Subagents`** section.
 _Avoid_: "agent" alone (collides with Pi's own assistant — only say "agent" inside the compound "agent definition"/"agent scope"), "delegate"/"specialist" (fanciful synonyms with no codebase precedent)
 
+**Subagent attachment**:
+A live interaction with a subagent started directly by the current session, without changing task ownership or execution. The user can view progress and send ordinary prompts as steering while the subagent runs. After completion, the attachment is read-only until the user detaches.
+_Avoid_: "takeover" (changes ownership), "session switch" (changes the active conversation), "replay" (shows recorded history)
+
+**Attachment target**:
+The individual subagent invocation selected for attachment, identified independently of its agent definition. Two invocations of the same agent definition are distinct attachment targets.
+_Avoid_: "agent name" (does not identify an invocation), "session switch" (attachment does not replace the main session)
+
 **Agent definition**:
 A markdown file (YAML frontmatter + a system-prompt body) that configures one subagent: its `name`, `description`, optional `tools`/`model`. Lives in `~/.pi/agent/agents` (user scope, always loaded) or `.pi/agents` (project scope, opt-in via `agentScope`). Parsed by `discoverAgents` in `packages/subagent/agents.ts`.
 _Avoid_: "agent file", "prompt" (collides with prompt-templates and LLM turns)
