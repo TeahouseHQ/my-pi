@@ -13,14 +13,16 @@
  */
 
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { StringEnum, Type, type Message } from "@earendil-works/pi-ai";
+import { StringEnum, Type, type ImageContent, type Message } from "@earendil-works/pi-ai";
 import {
 	type AgentToolResult,
 	CONFIG_DIR_NAME,
 	type ExtensionAPI,
+	type ExtensionUIContext,
 	getAgentDir,
 	getMarkdownTheme,
 	type Theme,
@@ -28,6 +30,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { type AgentConfig, type AgentScope, discoverAgents, formatAvailableSubagents } from "./agents";
+import {
+	type AttachableInvocation,
+	InvocationRegistry,
+	normalizeAttachId,
+	selectorLabel,
+} from "./attach";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -37,6 +45,35 @@ const PER_TASK_OUTPUT_CAP = 50 * 1024;
 // spawned subagent is one deeper. A spawn that would exceed this is refused
 // parent-side (see the guard in runSingleAgent) before the subprocess starts.
 const MAX_SUBAGENT_DEPTH = 2;
+
+/**
+ * Invocations started directly by this pi process, keyed by invocation id.
+ * Module-scoped on purpose: nested subagents run in their own processes and
+ * never appear here, and other sessions have their own registries.
+ */
+const invocationRegistry = new InvocationRegistry();
+
+/** UI hook the attachment feature registers so child runs can refresh the indicator. */
+let attachmentUi: ExtensionUIContext | undefined;
+let attachedInvocation: AttachableInvocation | undefined;
+
+function refreshAttachmentIndicator(): void {
+	if (!attachmentUi) return;
+	attachmentUi.setWidget(
+		"subagent-attachment",
+		attachedInvocation ? attachmentWidgetLines(attachedInvocation) : undefined,
+	);
+}
+
+function attachmentWidgetLines(invocation: AttachableInvocation): string[] {
+	const state = invocation.running
+		? "steering enabled — prompts go to this subagent"
+		: "completed — read-only until you detach";
+	return [
+		`⇢ attached: ${invocation.agent} (${invocation.id}) — ${state}`,
+		"  /detach or Escape to detach (does not cancel the task)",
+	];
+}
 
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
@@ -326,7 +363,7 @@ async function runSingleAgent(
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	const args: string[] = ["--mode", "rpc", "--no-session"];
 	if (agent.model) args.push("--model", agent.model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
@@ -362,18 +399,44 @@ async function runSingleAgent(
 			args.push("--append-system-prompt", tmpPromptPath);
 		}
 
-		args.push(`Task: ${task}`);
 		let wasAborted = false;
+		let settled = false;
 
 		const exitCode = await new Promise<number>((resolve) => {
 			const invocation = getPiInvocation(args);
 			const proc = spawn(invocation.command, invocation.args, {
 				cwd: cwd ?? defaultCwd,
 				shell: false,
-				stdio: ["ignore", "pipe", "pipe"],
+				// stdin is a pipe: RPC mode accepts steering commands on it while
+				// the task runs, which is what /attach routing relies on.
+				stdio: ["pipe", "pipe", "pipe"],
 				env: { ...process.env, PI_SUBAGENT_DEPTH: String(childDepth) },
 			});
 			let buffer = "";
+
+			// Register the invocation so /attach can list and steer it.
+			const live: AttachableInvocation = {
+				id: randomUUID().slice(0, 8),
+				agent: agentName,
+				task,
+				running: true,
+				steer(text: string, images?: ImageContent[]) {
+					if (settled || proc.stdin.destroyed) return false;
+					const command: Record<string, unknown> = { type: "steer", message: text };
+					if (images && images.length > 0) command.images = images;
+					proc.stdin.write(`${JSON.stringify(command)}\n`);
+					return true;
+				},
+			};
+			invocationRegistry.add(live);
+			const markSettled = () => {
+				if (live.running) {
+					live.running = false;
+					refreshAttachmentIndicator();
+				}
+			};
+
+			proc.stdin.write(`${JSON.stringify({ type: "prompt", message: `Task: ${task}` })}\n`);
 
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
@@ -410,6 +473,14 @@ async function runSingleAgent(
 					currentResult.messages.push(event.message as Message);
 					emitUpdate();
 				}
+
+				// RPC children do not exit on their own once a run settles;
+				// shut the child down and release its attachment slot.
+				if (event.type === "agent_settled") {
+					settled = true;
+					markSettled();
+					if (!wasAborted) proc.kill("SIGTERM");
+				}
 			};
 
 			proc.stdout.on("data", (data) => {
@@ -425,10 +496,12 @@ async function runSingleAgent(
 
 			proc.on("close", (code) => {
 				if (buffer.trim()) processLine(buffer);
-				resolve(code ?? 0);
+				markSettled();
+				resolve(settled ? 0 : (code ?? 1));
 			});
 
 			proc.on("error", () => {
+				markSettled();
 				resolve(1);
 			});
 
@@ -518,6 +591,121 @@ export function registerSubagent(pi: ExtensionAPI) {
 		if (!roster) return;
 
 		return { systemPrompt: `${event.systemPrompt}\n\n${roster}` };
+	});
+
+	// ── Attachment: /attach, /detach, and input routing ─────────────────────
+
+	let unsubscribeEscape: (() => void) | undefined;
+
+	const detach = (ui: ExtensionUIContext, quiet = false) => {
+		if (!attachedInvocation) return;
+		attachedInvocation = undefined;
+		unsubscribeEscape?.();
+		unsubscribeEscape = undefined;
+		ui.setWidget("subagent-attachment", undefined);
+		if (!quiet) ui.notify("Detached. Input returns to the main session.", "info");
+	};
+
+	const attach = (invocation: AttachableInvocation, ui: ExtensionUIContext, mode: string) => {
+		attachedInvocation = invocation;
+		attachmentUi = ui;
+		ui.setWidget("subagent-attachment", attachmentWidgetLines(invocation));
+		ui.notify(`Attached to ${invocation.agent} (${invocation.id}). Prompts now steer this subagent.`, "info");
+		if (mode === "tui") {
+			unsubscribeEscape?.();
+			unsubscribeEscape = ui.onTerminalInput((data) => {
+				if (data === "\x1b" && attachmentUi) {
+					detach(attachmentUi);
+					return { consume: true };
+				}
+				return undefined;
+			});
+		}
+	};
+
+	pi.registerCommand("attach", {
+		description: "Attach to a running subagent and steer it with the input editor",
+		handler: async (args, ctx) => {
+			if (!ctx.hasUI) return;
+			const id = normalizeAttachId(args);
+
+			if (!id) {
+				const running = invocationRegistry.running();
+				if (running.length === 0) {
+					ctx.ui.notify("No running subagents to attach to. Start one with the subagent tool first.", "info");
+					return;
+				}
+				const selected = await ctx.ui.select("Attach to subagent", running.map(selectorLabel));
+				if (selected === undefined) return; // canceling the selector keeps any current attachment
+				const chosen = running.find((i) => selectorLabel(i) === selected);
+				if (chosen) attach(chosen, ctx.ui, ctx.mode);
+				return;
+			}
+
+			const invocation = invocationRegistry.get(id);
+			if (!invocation) {
+				ctx.ui.notify(`No subagent invocation with id "${id}" in this session.`, "warning");
+				return;
+			}
+			if (!invocation.running) {
+				ctx.ui.notify(`Subagent ${invocation.agent} (${id}) has already completed and cannot be attached.`, "warning");
+				return;
+			}
+			attach(invocation, ctx.ui, ctx.mode);
+		},
+	});
+
+	pi.registerCommand("detach", {
+		description: "Detach from the attached subagent (does not cancel its task)",
+		handler: async (_args, ctx) => {
+			if (!ctx.hasUI) return;
+			if (!attachedInvocation) {
+				ctx.ui.notify("Not attached to any subagent.", "info");
+				return;
+			}
+			detach(ctx.ui);
+		},
+	});
+
+	// While attached, ordinary prompts (text and images) steer the attached
+	// subagent and are withheld from the main agent. Slash commands stay local;
+	// shell input is blocked until detachment.
+	pi.on("input", (event, ctx) => {
+		const invocation = attachedInvocation;
+		if (!invocation) return;
+
+		if (event.text.startsWith("/")) return; // session commands remain local
+		if (event.text.startsWith("!")) {
+			if (ctx.hasUI)
+				ctx.ui.notify("Shell input is disabled while attached. /detach first to run shell commands.", "warning");
+			return { action: "handled" };
+		}
+		if (!invocation.running || invocationRegistry.isSettled(invocation.id)) {
+			if (ctx.hasUI)
+				ctx.ui.notify(
+					`Subagent ${invocation.agent} (${invocation.id}) has completed; the attachment is read-only. /detach to continue.`,
+					"warning",
+				);
+			return { action: "handled" };
+		}
+		if (!invocation.steer(event.text, event.images)) {
+			if (ctx.hasUI) ctx.ui.notify("Could not queue steering — the subagent is no longer accepting input.", "error");
+			return { action: "handled" };
+		}
+		if (ctx.hasUI)
+			ctx.ui.notify(
+				`Steering queued for ${invocation.agent} (${invocation.id}) — delivered at its next steering point; it does not abort a running tool.`,
+				"info",
+			);
+		return { action: "handled" };
+	});
+
+	pi.on("session_shutdown", async (_event, ctx) => {
+		unsubscribeEscape?.();
+		unsubscribeEscape = undefined;
+		attachedInvocation = undefined;
+		attachmentUi = undefined;
+		if (ctx.hasUI) ctx.ui.setWidget("subagent-attachment", undefined);
 	});
 
 	pi.registerTool({
