@@ -28,6 +28,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { type AgentConfig, type AgentScope, discoverAgents, formatAvailableSubagents } from "./agents";
+import { validateModelOverride } from "./models";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -284,6 +285,7 @@ async function runSingleAgent(
 	task: string,
 	cwd: string | undefined,
 	step: number | undefined,
+	modelOverride: string | undefined,
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
@@ -326,8 +328,10 @@ async function runSingleAgent(
 		};
 	}
 
+	const model = modelOverride ?? agent.model;
+
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
-	if (agent.model) args.push("--model", agent.model);
+	if (model) args.push("--model", model);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
 	let tmpPromptDir: string | null = null;
@@ -341,7 +345,7 @@ async function runSingleAgent(
 		messages: [],
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-		model: agent.model,
+		model,
 		step,
 	};
 
@@ -464,16 +468,25 @@ async function runSingleAgent(
 	}
 }
 
+const ModelParam = Type.Optional(
+	Type.String({
+		description:
+			'Optional model override (e.g. "anthropic/claude-haiku-4-5"). Omit to use the agent\'s manifest model.',
+	}),
+);
+
 const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task to delegate to the agent" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	model: ModelParam,
 });
 
 const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	model: ModelParam,
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -485,6 +498,7 @@ const SubagentParams = Type.Object({
 	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
 	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
 	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
+	model: ModelParam,
 	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(
@@ -565,6 +579,23 @@ export function registerSubagent(pi: ExtensionAPI) {
 				};
 			}
 
+			// Validate model overrides up front so invalid names fail fast, in any mode.
+			for (const override of [
+				params.model,
+				...(params.chain?.map((s) => s.model) ?? []),
+				...(params.tasks?.map((t) => t.model) ?? []),
+			]) {
+				if (!override) continue;
+				const modelCheck = validateModelOverride(override);
+				if (!modelCheck.ok) {
+					return {
+						content: [{ type: "text", text: modelCheck.error }],
+						details: makeDetails(hasChain ? "chain" : hasTasks ? "parallel" : "single")([]),
+						isError: true,
+					};
+				}
+			}
+
 			if ((agentScope === "project" || agentScope === "both") && confirmProjectAgents && ctx.hasUI) {
 				const requestedAgentNames = new Set<string>();
 				if (params.chain) for (const step of params.chain) requestedAgentNames.add(step.agent);
@@ -620,6 +651,7 @@ export function registerSubagent(pi: ExtensionAPI) {
 						taskWithContext,
 						step.cwd,
 						i + 1,
+						step.model,
 						signal,
 						chainUpdate,
 						makeDetails("chain"),
@@ -692,6 +724,7 @@ export function registerSubagent(pi: ExtensionAPI) {
 						t.task,
 						t.cwd,
 						undefined,
+						t.model,
 						signal,
 						// Per-task update callback
 						(partial) => {
@@ -732,8 +765,9 @@ export function registerSubagent(pi: ExtensionAPI) {
 					agents,
 					params.agent,
 					params.task,
-					params.cwd,
+						params.cwd,
 					undefined,
+					params.model,
 					signal,
 					onUpdate,
 					makeDetails("single"),

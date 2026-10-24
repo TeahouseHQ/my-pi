@@ -101,6 +101,8 @@ Use a chain: first have scout find the read tool, then have planner suggest impr
 | Parallel | `{ tasks: [...] }` | Multiple agents run concurrently (max 8, 4 concurrent) |
 | Chain | `{ chain: [...] }` | Sequential with `{previous}` placeholder |
 
+Every mode accepts an optional `model` override (e.g. `"anthropic/claude-haiku-4-5"`). When omitted, the agent's manifest `model` is used. An invalid model name fails with the list of available models.
+
 ## Output Display
 
 **Collapsed view** (default):
