@@ -172,6 +172,23 @@ Project agents override user agents with the same name when `agentScope: "both"`
 - **stopReason "aborted"**: User abort (Ctrl+C) kills subprocess, throws error
 - **Chain mode**: Stops at first failing step, reports which step failed
 
+## Attaching to a running subagent
+
+While a subagent runs, `/attach` lists invocations started directly by the
+current session (nested subagents and other sessions are excluded) and shows
+the agent name, a unique invocation id, and a task preview. `/attach <id>`
+selects an invocation directly.
+
+While attached, the ordinary input editor sends prompts — including attached
+images — as steering to that subagent; they are withheld from the main agent.
+An indicator above the editor names the attachment target. Steering is
+delivered at the subagent's next steering point and does not abort a running
+tool. Slash commands stay local and shell input is blocked until detachment.
+
+`/detach` or Escape restores input to the main session without cancelling the
+task. When the subagent completes, its result is returned through the existing
+subagent tool result and the attachment becomes read-only until detached.
+
 ## Limitations
 
 - Output truncated to last 10 items in collapsed view (expand to see all)
